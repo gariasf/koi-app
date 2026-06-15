@@ -55,10 +55,9 @@ struct FirstRunView: View {
         }
         .sheet(item: $presented) { r in
             switch r {
-            case .own:
-                AddOwnedCarView().environmentObject(garage)
-            default:
-                ComingSoonSheet(relationship: r)
+            case .own:    AddOwnedCarView().environmentObject(garage)
+            case .plan:   AddPlanCarView().environmentObject(garage)
+            case .borrow: AddRentalView().environmentObject(garage)
             }
         }
     }
@@ -69,31 +68,6 @@ struct FirstRunView: View {
             Text("koi").koiStyle(.wordmark).foregroundStyle(KoiColors.textPrimary)
             Text("your cars, calmly").koiStyle(.body).foregroundStyle(KoiColors.textSecondary)
         }
-    }
-}
-
-/// Placeholder for the plan/rental setup forms (next phase). Keeps first-run honest:
-/// this vertical slice fully wires "Own it".
-struct ComingSoonSheet: View {
-    let relationship: Relationship
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        VStack(spacing: 16) {
-            ModalHeader(title: "New car · \(relationship.title)") { dismiss() }
-            Spacer()
-            RippleMark(size: 40)
-            Text("\(relationship.title) setup is coming next.")
-                .koiStyle(.glanceLine).foregroundStyle(KoiColors.textPrimary)
-                .multilineTextAlignment(.center)
-            Text("This slice wires up Own it end-to-end. Plan and rental forms are the next step.")
-                .koiStyle(.body).foregroundStyle(KoiColors.textSecondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 36)
-            Spacer()
-            Spacer()
-        }
-        .background(KoiColors.surface.ignoresSafeArea())
     }
 }
 

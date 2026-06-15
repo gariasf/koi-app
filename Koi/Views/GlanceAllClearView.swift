@@ -1,6 +1,6 @@
 import SwiftUI
 
-// MARK: - Icon-tile tint
+// MARK: - Shared Glance building blocks (used across several screens)
 
 enum GlanceTint {
     case neutral, sage, ochre
@@ -20,8 +20,6 @@ enum GlanceTint {
         }
     }
 }
-
-// MARK: - Small building blocks
 
 /// NOTE: SF Symbols are scaffold placeholders. The handoff specifies Lucide icons
 /// (1.5–1.6px stroke, rounded). Production must bundle Lucide and swap these.
@@ -48,7 +46,7 @@ struct Eyebrow: View {
     }
 }
 
-/// One compact Glance card: eyebrow + icon tile + (title/subtitle) + optional trailing mono.
+/// One compact card: eyebrow + icon tile + (title/subtitle) + optional trailing mono.
 struct GlanceCard: View {
     let eyebrow: String
     let icon: String
@@ -109,7 +107,6 @@ struct GlanceAllClearView: View {
             .padding(.top, KoiSpace.s2)
             .padding(.bottom, KoiSpace.s2)
         }
-        .safeAreaInset(edge: .bottom, spacing: 0) { tabBar }
     }
 
     // greeting + date + active car (real, from the store)
@@ -145,17 +142,14 @@ struct GlanceAllClearView: View {
         .background(alignment: .top) { Bloom().offset(y: -24) }
     }
 
-    // Bottom-anchored stack of three compact cards.
-    // TODO (P4/P6): drive these from real FuelLog / Reminder / fuel-price data.
-    // Static sample content for now so the resting state reads as complete.
     private var cards: some View {
         VStack(spacing: 12) {
+            // TODO (P6): real reminders engine.
             GlanceCard(eyebrow: "Next up", icon: "calendar", tint: .neutral,
-                       title: "ITV inspection", subtitle: "Betsy · roadworthiness",
+                       title: "ITV inspection", subtitle: "Biennial roadworthiness check",
                        trailing: "14 Aug", trailingMeta: "in 9 weeks")
-            GlanceCard(eyebrow: "Last fill-up", icon: "drop.fill", tint: .sage,
-                       title: "€61.40 · 6.3 L/100km", titleMono: true,
-                       subtitle: "Tue, 10 Jun · Repsol")
+            lastFillCard   // real, from the store
+            // TODO (P8): live Spain fuel-price feed.
             GlanceCard(eyebrow: "Diesel nearby", icon: "mappin", tint: .sage,
                        title: "€1.42 /L", titleMono: true,
                        subtitle: "Repsol, Av. de Burgos · 800 m",
@@ -163,52 +157,27 @@ struct GlanceAllClearView: View {
         }
     }
 
-    // custom bottom bar: Glance · raised ＋ Log · Garage
-    private var tabBar: some View {
-        HStack(spacing: 0) {
-            tabItem(label: "Glance", active: true) {
-                RippleMark(size: 24, color: KoiColors.sage)
-            }
-            Spacer(minLength: 0)
-            logButton
-            Spacer(minLength: 0)
-            tabItem(label: "Garage", active: false) {
-                Image(systemName: "square.grid.2x2")
-                    .font(.system(size: 20, weight: .regular))
-                    .foregroundStyle(KoiColors.textSubdued)
-            }
-        }
-        .padding(.horizontal, 44)
-        .padding(.top, 12)
-        .padding(.bottom, 4)
-        .background(KoiColors.surface)
-        .overlay(alignment: .top) {
-            Rectangle().fill(KoiColors.hairline).frame(height: 1)
+    @ViewBuilder private var lastFillCard: some View {
+        if let car = garage.activeCar, let log = garage.latestFuelLog(for: car) {
+            GlanceCard(eyebrow: "Last fill-up", icon: "drop.fill", tint: .sage,
+                       title: lastFillTitle(log), titleMono: true,
+                       subtitle: lastFillSubtitle(log))
+        } else {
+            GlanceCard(eyebrow: "Last fill-up", icon: "drop.fill", tint: .sage,
+                       title: "No fill-ups yet", subtitle: "Tap ＋ to log your first")
         }
     }
 
-    private func tabItem<Icon: View>(label: String,
-                                     active: Bool,
-                                     @ViewBuilder icon: () -> Icon) -> some View {
-        VStack(spacing: 4) {
-            icon()
-            Text(label).koiStyle(.tabLabel)
-                .foregroundStyle(active ? KoiColors.textPrimary : KoiColors.textSubdued)
+    private func lastFillTitle(_ log: FuelLog) -> String {
+        let money = KoiFormat.money(log.amount, code: log.currency)
+        if let e = garage.efficiencyL100(for: log) {
+            return "\(money) · \(KoiFormat.efficiency(e))"
         }
+        return money
     }
 
-    private var logButton: some View {
-        Circle()
-            .fill(KoiColors.sage)
-            .frame(width: 56, height: 56)
-            .overlay(
-                Image(systemName: "plus")
-                    .font(.system(size: 22, weight: .medium))
-                    .foregroundStyle(.white)
-            )
-            .shadow(color: KoiColors.sage.opacity(0.35), radius: 10, x: 0, y: 4)
-            .offset(y: -16)
-            .accessibilityLabel("Log")
+    private func lastFillSubtitle(_ log: FuelLog) -> String {
+        [KoiFormat.shortDate(log.date), log.station].compactMap { $0 }.joined(separator: " · ")
     }
 
     // MARK: derived copy

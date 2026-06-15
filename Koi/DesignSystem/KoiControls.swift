@@ -16,7 +16,6 @@ struct KoiField: View {
             TextField(placeholder, text: $text)
                 .koiStyle(mono ? .monoMd : .body)
                 .foregroundStyle(KoiColors.textPrimary)
-                .textInputAutocapitalization(.words)
                 .keyboardType(keyboard)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 11)
@@ -60,7 +59,33 @@ struct KoiPrimaryButton: View {
     }
 }
 
-/// A tappable option row (icon tile + title + subtitle + chevron) on the signature card.
+/// The visual content of an option row (icon tile + title + subtitle + chevron) on a card.
+/// Split from the button form so it can also back a `NavigationLink`.
+struct OptionRowContent: View {
+    let icon: String
+    let title: String
+    let subtitle: String
+
+    var body: some View {
+        HStack(spacing: 14) {
+            IconTile(systemName: icon, tint: .neutral)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title).koiStyle(.listTitle).foregroundStyle(KoiColors.textPrimary)
+                Text(subtitle)
+                    .koiStyle(.meta).foregroundStyle(KoiColors.textSecondary)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 8)
+            Image(systemName: "chevron.right")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(KoiColors.textSubdued)
+        }
+        .koiCard()
+    }
+}
+
+/// Tappable option row (button form).
 struct OptionRow: View {
     let icon: String
     let title: String
@@ -69,23 +94,29 @@ struct OptionRow: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 14) {
-                IconTile(systemName: icon, tint: .neutral)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(title).koiStyle(.listTitle).foregroundStyle(KoiColors.textPrimary)
-                    Text(subtitle)
-                        .koiStyle(.meta).foregroundStyle(KoiColors.textSecondary)
-                        .multilineTextAlignment(.leading)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                Spacer(minLength: 8)
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(KoiColors.textSubdued)
-            }
-            .koiCard()
+            OptionRowContent(icon: icon, title: title, subtitle: subtitle)
         }
         .buttonStyle(.plain)
+    }
+}
+
+/// A labeled toggle row (sage = on). Used in grouped "what's included" cards.
+struct KoiToggleRow: View {
+    let title: String
+    var subtitle: String? = nil
+    @Binding var isOn: Bool
+
+    var body: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).koiStyle(.body).foregroundStyle(KoiColors.textPrimary)
+                if let subtitle {
+                    Text(subtitle).koiStyle(.meta).foregroundStyle(KoiColors.textSubdued)
+                }
+            }
+            Spacer()
+            Toggle("", isOn: $isOn).labelsHidden().tint(KoiColors.sage)
+        }
     }
 }
 

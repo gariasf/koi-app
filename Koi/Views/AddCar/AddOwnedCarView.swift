@@ -4,6 +4,7 @@ import SwiftUI
 struct AddOwnedCarView: View {
     @EnvironmentObject private var garage: Garage
     @Environment(\.dismiss) private var dismiss
+    var onSaved: (() -> Void)? = nil
 
     @State private var makeModel = ""
     @State private var year = ""
@@ -40,6 +41,7 @@ struct AddOwnedCarView: View {
                 .padding(.bottom, 12)
         }
         .background(KoiColors.surface.ignoresSafeArea())
+        .toolbar(.hidden, for: .navigationBar)
     }
 
     // TODO: native PhotosPicker (P9); prototype used a drag-drop placeholder.
@@ -74,7 +76,7 @@ struct AddOwnedCarView: View {
         car.nickname = nick.isEmpty ? nil : nick
         car.accent = .slate
         garage.addOwnedCar(car)
-        dismiss()
+        if let onSaved { onSaved() } else { dismiss() }
     }
 }
 

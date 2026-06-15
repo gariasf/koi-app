@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Root router. Empty garage → first run; otherwise → the Glance.
+/// Root router. Empty garage → first run; otherwise → the tabbed app shell.
 /// Carries a small dev-only light/dark toggle (remove once navigation matures).
 struct ContentView: View {
     @EnvironmentObject private var garage: Garage
@@ -11,7 +11,7 @@ struct ContentView: View {
             if garage.isEmpty {
                 FirstRunView()
             } else {
-                GlanceAllClearView()
+                RootTabView()
             }
         }
         .animation(.easeInOut(duration: 0.25), value: garage.isEmpty)
@@ -49,5 +49,5 @@ struct ContentView: View {
 }
 
 #Preview("First run") { ContentView().environmentObject(Garage(persists: false)) }
-#Preview("Glance · light") { ContentView().environmentObject(Garage.preview).preferredColorScheme(.light) }
-#Preview("Glance · dark") { ContentView().environmentObject(Garage.preview).preferredColorScheme(.dark) }
+#Preview("App · light") { ContentView().environmentObject(Garage.preview).preferredColorScheme(.light) }
+#Preview("App · dark") { ContentView().environmentObject(Garage.preview).preferredColorScheme(.dark) }
