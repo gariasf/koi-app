@@ -30,6 +30,7 @@ struct Plan: Identifiable, Codable, Hashable {
     var includesMaintenance: Bool = false
     var includesRoadside: Bool = false
     var allowsSwap: Bool = false
+    var swapIntervalMonths: Int?   // e.g. 6 — only meaningful when allowsSwap
 
     /// Ordered lineage of cars that have occupied this plan; `.last` is current.
     var carIDs: [UUID] = []

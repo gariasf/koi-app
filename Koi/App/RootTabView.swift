@@ -6,10 +6,11 @@ enum KoiTab { case glance, garage }
 /// with a raised central ＋ Log that presents the quick-add sheet for the active car.
 struct RootTabView: View {
     @EnvironmentObject private var garage: Garage
+    @EnvironmentObject private var fuel: FuelPriceStore
     @State private var tab: KoiTab =
         ProcessInfo.processInfo.arguments.contains("-garage") ? .garage : .glance
     @State private var showLog = false
-    @State private var showVaultLaunch = ProcessInfo.processInfo.arguments.contains("-vault")
+    @State private var devScreen: String? = RootTabView.devScreenArg()
 
     var body: some View {
         content
@@ -21,13 +22,34 @@ struct RootTabView: View {
                         .presentationDragIndicator(.visible)
                 }
             }
-            .sheet(isPresented: $showVaultLaunch) {   // dev deep-link: `-vault`
-                if let car = garage.activeCar {
-                    InsuranceVaultView(car: car)
-                        .environmentObject(garage)
-                        .presentationDragIndicator(.visible)
-                }
+            .sheet(isPresented: Binding(get: { devScreen != nil },
+                                        set: { if !$0 { devScreen = nil } })) {
+                devScreenContent.presentationDragIndicator(.visible)
             }
+    }
+
+    // Dev-only deep-links for screenshots: launch with `-screen <name>`.
+    private static func devScreenArg() -> String? {
+        let a = ProcessInfo.processInfo.arguments
+        if let i = a.firstIndex(of: "-screen"), i + 1 < a.count { return a[i + 1] }
+        if a.contains("-vault") { return "vault" }
+        return nil
+    }
+
+    @ViewBuilder private var devScreenContent: some View {
+        switch devScreen {
+        case "log":          if let c = garage.activeCar { LogSheetView(car: c).environmentObject(garage) }
+        case "cardetail":    if let c = garage.residents.first { NavigationStack { CarDetailView(car: c).environmentObject(garage) } }
+        case "cardetailsub": if let c = garage.residents.last { NavigationStack { CarDetailView(car: c).environmentObject(garage) } }
+        case "addplan":      NavigationStack { AddPlanCarView().environmentObject(garage) }
+        case "addowned":     NavigationStack { AddOwnedCarView().environmentObject(garage) }
+        case "addrental":    NavigationStack { AddRentalView().environmentObject(garage) }
+        case "settings":     SettingsView().environmentObject(fuel)
+        case "vault":        if let c = garage.residents.first { InsuranceVaultView(car: c).environmentObject(garage) }
+        case "reminder":     if let r = garage.comingUp.first { ReminderDetailView(reminder: r).environmentObject(garage) }
+        case "firstrun":     FirstRunView().environmentObject(garage)
+        default:             EmptyView()
+        }
     }
 
     @ViewBuilder private var content: some View {

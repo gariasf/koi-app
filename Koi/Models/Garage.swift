@@ -89,6 +89,18 @@ final class Garage: ObservableObject {
         save()
     }
 
+    func updateCar(_ car: Car) {
+        guard let i = cars.firstIndex(where: { $0.id == car.id }) else { return }
+        cars[i] = car
+        save()
+    }
+
+    func updatePlan(_ plan: Plan) {
+        guard let i = plans.firstIndex(where: { $0.id == plan.id }) else { return }
+        plans[i] = plan
+        save()
+    }
+
     func markReturned(_ rental: Rental) {
         guard let i = rentals.firstIndex(where: { $0.id == rental.id }) else { return }
         rentals[i].returned = true
@@ -330,7 +342,7 @@ final class Garage: ObservableObject {
         var sub = Plan(kind: .subscription)
         sub.provider = "Mocean"; sub.monthlyCost = 459; sub.mileageCapPerMonth = 1_500
         sub.includesInsurance = true; sub.includesMaintenance = true; sub.includesRoadside = true
-        sub.allowsSwap = true
+        sub.allowsSwap = true; sub.swapIntervalMonths = 6
         let saved = addPlanCar(kona, plan: sub)
         var tucson = Car(make: "Hyundai", model: "Tucson"); tucson.accent = .sage
         tucson.odometerKm = 1_020; tucson.addedAt = Date().addingTimeInterval(-90 * 86_400)

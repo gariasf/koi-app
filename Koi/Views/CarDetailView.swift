@@ -9,6 +9,7 @@ struct CarDetailView: View {
     @State private var showLog = false
     @State private var showSwap = false
     @State private var showVault = false
+    @State private var showEdit = false
 
     private var plan: Plan? { garage.plan(for: car) }
     private var canSwap: Bool { plan?.allowsSwap == true }
@@ -35,6 +36,9 @@ struct CarDetailView: View {
         .sheet(isPresented: $showVault) {
             InsuranceVaultView(car: car).environmentObject(garage).presentationDragIndicator(.visible)
         }
+        .sheet(isPresented: $showEdit) {
+            EditCarView(car: car).environmentObject(garage).presentationDragIndicator(.visible)
+        }
         .sheet(isPresented: $showSwap) {
             if let plan {
                 NavigationStack {
@@ -57,6 +61,10 @@ struct CarDetailView: View {
             }
             .buttonStyle(.plain)
             Spacer()
+            Button { showEdit = true } label: {
+                Text("Edit").koiStyle(.body).foregroundStyle(KoiColors.sageText)
+            }
+            .buttonStyle(.plain)
         }
         .padding(.top, 8)
     }
@@ -113,9 +121,7 @@ struct CarDetailView: View {
             actionTile("Remind", "bell") { }
             actionTile("Docs", "folder") { showVault = true }
             if canSwap {
-                actionTile("Swap car", "arrow.triangle.2.circlepath") { showSwap = true }
-            } else {
-                actionTile("Edit", "pencil") { }
+                actionTile("Swap", "arrow.triangle.2.circlepath") { showSwap = true }
             }
         }
     }
@@ -142,8 +148,12 @@ struct CarDetailView: View {
             VStack(alignment: .leading, spacing: 6) {
                 Eyebrow(text: plan.kind.label)
                 Text(planLine(plan)).koiStyle(.monoMd).foregroundStyle(KoiColors.textPrimary)
+                if let end = plan.endsAt {
+                    Text("Until \(end.formatted(.dateTime.month(.abbreviated).year()))")
+                        .koiStyle(.meta).foregroundStyle(KoiColors.textSubdued)
+                }
                 if plan.allowsSwap {
-                    Text("Swappable · the plan continues across cars")
+                    Text(swapText(plan))
                         .koiStyle(.meta).foregroundStyle(KoiColors.textSubdued)
                 }
             }
@@ -158,6 +168,13 @@ struct CarDetailView: View {
         if let m = plan.monthlyCost { parts.append(KoiFormat.money(m) + "/mo") }
         if let cap = plan.mileageCapPerMonth { parts.append("\(cap) km/mo cap") }
         return parts.joined(separator: " · ")
+    }
+
+    private func swapText(_ plan: Plan) -> String {
+        if let m = plan.swapIntervalMonths {
+            return "Swap every \(m) months · plan continues across cars"
+        }
+        return "Swappable · the plan continues across cars"
     }
 
     // merged timeline: fuel logs + swap-in / origin event, newest first
