@@ -94,26 +94,42 @@ private extension Urgency {
 
 struct GlanceView: View {
     @EnvironmentObject private var garage: Garage
+    @EnvironmentObject private var fuel: FuelPriceStore
     @State private var selected: Reminder?
+    @State private var showSettings = false
 
     var body: some View {
         ZStack {
             KoiColors.surface.ignoresSafeArea()
             if garage.isAllClear { directionA } else { directionB }
         }
+        .task { await fuel.refresh() }
         .sheet(item: $selected) { r in
             ReminderDetailView(reminder: r)
                 .environmentObject(garage)
                 .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $showSettings) {
+            SettingsView().environmentObject(fuel).presentationDragIndicator(.visible)
         }
     }
 
     // MARK: header (shared)
     private var header: some View {
         VStack(alignment: .leading, spacing: 12) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text(greeting).koiStyle(.glanceLine).foregroundStyle(KoiColors.textPrimary)
-                Text(dateLine).koiStyle(.meta).foregroundStyle(KoiColors.textSubdued)
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(greeting).koiStyle(.glanceLine).foregroundStyle(KoiColors.textPrimary)
+                    Text(dateLine).koiStyle(.meta).foregroundStyle(KoiColors.textSubdued)
+                }
+                Spacer()
+                Button { showSettings = true } label: {
+                    Image(systemName: "gearshape")
+                        .font(.system(size: 18, weight: .regular))
+                        .foregroundStyle(KoiColors.textSubdued)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Settings")
             }
             HStack(spacing: 8) {
                 Circle().fill(KoiColors.sage).frame(width: 9, height: 9)
@@ -246,11 +262,20 @@ struct GlanceView: View {
         }
     }
 
-    // TODO (P8): live Spain fuel-price feed.
-    private var dieselCard: some View {
-        GlanceCard(eyebrow: "Diesel nearby", icon: "mappin", tint: .sage,
-                   title: "€1.42 /L", titleMono: true,
-                   subtitle: "Repsol, Av. de Burgos · 800 m", trailingMeta: "2h ago")
+    // Live local fuel price (minetur feed) — tap to pick region.
+    @ViewBuilder private var dieselCard: some View {
+        Button { showSettings = true } label: {
+            if let s = fuel.cheapest, let price = fuel.product.price(s) {
+                GlanceCard(eyebrow: fuel.product.nearbyEyebrow, icon: "mappin", tint: .sage,
+                           title: KoiFormat.pricePerLiter(price), titleMono: true,
+                           subtitle: "\(s.brand) · \(s.municipality)",
+                           trailingMeta: fuel.freshnessText.isEmpty ? nil : fuel.freshnessText)
+            } else {
+                GlanceCard(eyebrow: "Fuel nearby", icon: "mappin", tint: .sage,
+                           title: "Pick your region", subtitle: "Set a province to see live prices")
+            }
+        }
+        .buttonStyle(.plain)
     }
 
     private func lastFillTitle(_ log: FuelLog) -> String {
@@ -282,5 +307,9 @@ struct GlanceView: View {
     }
 }
 
-#Preview("All clear") { GlanceView().environmentObject(Garage(persists: false)) }
-#Preview("Coming up") { GlanceView().environmentObject(Garage.preview) }
+#Preview("All clear") {
+    GlanceView().environmentObject(Garage(persists: false)).environmentObject(FuelPriceStore.preview)
+}
+#Preview("Coming up") {
+    GlanceView().environmentObject(Garage.preview).environmentObject(FuelPriceStore.preview)
+}

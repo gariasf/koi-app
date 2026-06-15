@@ -48,6 +48,12 @@ struct ContentView: View {
     }
 }
 
-#Preview("First run") { ContentView().environmentObject(Garage(persists: false)) }
-#Preview("App · light") { ContentView().environmentObject(Garage.preview).preferredColorScheme(.light) }
-#Preview("App · dark") { ContentView().environmentObject(Garage.preview).preferredColorScheme(.dark) }
+#Preview("First run") {
+    ContentView().environmentObject(Garage(persists: false)).environmentObject(FuelPriceStore.preview)
+}
+#Preview("App · light") {
+    ContentView().environmentObject(Garage.preview).environmentObject(FuelPriceStore.preview).preferredColorScheme(.light)
+}
+#Preview("App · dark") {
+    ContentView().environmentObject(Garage.preview).environmentObject(FuelPriceStore.preview).preferredColorScheme(.dark)
+}

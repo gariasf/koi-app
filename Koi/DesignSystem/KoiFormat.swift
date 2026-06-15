@@ -18,6 +18,10 @@ enum KoiFormat {
         km.formatted(.number.grouping(.automatic)) + " km"
     }
 
+    static func pricePerLiter(_ p: Double) -> String {
+        String(format: "€%.3f /L", p)
+    }
+
     /// "Tue, 10 Jun"
     static func shortDate(_ date: Date) -> String {
         date.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated))

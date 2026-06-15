@@ -93,4 +93,4 @@ struct RootTabView: View {
     }
 }
 
-#Preview { RootTabView().environmentObject(Garage.preview) }
+#Preview { RootTabView().environmentObject(Garage.preview).environmentObject(FuelPriceStore.preview) }

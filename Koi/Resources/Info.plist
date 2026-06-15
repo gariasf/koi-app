@@ -39,5 +39,21 @@
 		<string>GeistMono-Medium.ttf</string>
 		<string>GeistMono-Bold.ttf</string>
 	</array>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<!-- Scoped exception: the minetur gov fuel feed uses a legacy TLS config that ATS rejects by default. -->
+		<key>NSExceptionDomains</key>
+		<dict>
+			<key>sedeaplicaciones.minetur.gob.es</key>
+			<dict>
+				<key>NSExceptionMinimumTLSVersion</key>
+				<string>TLSv1.0</string>
+				<key>NSExceptionRequiresForwardSecrecy</key>
+				<false/>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<true/>
+			</dict>
+		</dict>
+	</dict>
 </dict>
 </plist>

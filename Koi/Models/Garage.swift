@@ -343,23 +343,29 @@ final class Garage: ObservableObject {
                          dropoff: Date().addingTimeInterval(-36 * 86_400),
                          fuelPolicyFullToFull: true, excess: 1_200, cdwTaken: true, returned: true))
 
+        // `-calm` suppresses the coming-up items, leaving the Glance all-clear (Direction A).
+        let calm = ProcessInfo.processInfo.arguments.contains("-calm")
+
         // Reminders — two coming up (→ Glance Direction B), two on the horizon (neutral)
-        addReminder(Reminder(carID: betsy.id, kind: .inspection, title: "ITV inspection",
-                             detail: "\(betsy.displayName) · biennial check",
-                             dueDate: Date().addingTimeInterval(63 * 86_400)))
-        addReminder(Reminder(carID: betsy.id, kind: .service, title: "Oil & filter service",
-                             detail: betsy.displayName,
-                             dueMileageKm: (betsy.odometerKm ?? 142_300) + 1_500))
-        addReminder(Reminder(carID: tucson.id, kind: .mileageCap, title: "Mileage this month",
-                             detail: "\(tucson.displayName) · Mocean",
-                             monthlyUsedKm: 1_020, monthlyCapKm: 1_500))
+        if !calm {
+            addReminder(Reminder(carID: betsy.id, kind: .inspection, title: "ITV inspection",
+                                 detail: "\(betsy.displayName) · biennial check",
+                                 dueDate: Date().addingTimeInterval(63 * 86_400)))
+            addReminder(Reminder(carID: betsy.id, kind: .service, title: "Oil & filter service",
+                                 detail: betsy.displayName,
+                                 dueMileageKm: (betsy.odometerKm ?? 142_300) + 1_500))
+            addReminder(Reminder(carID: tucson.id, kind: .mileageCap, title: "Mileage this month",
+                                 detail: "\(tucson.displayName) · Mocean",
+                                 monthlyUsedKm: 1_020, monthlyCapKm: 1_500))
+        }
 
         // Insurance — Betsy carries a Mapfre policy (auto-creates the renewal reminder, 16 days)
         addPolicy(InsurancePolicy(carID: betsy.id, insurer: "Mapfre",
                                   policyNumber: "ES-4471 8820", coverage: "Comprehensive",
                                   premium: 412, premiumLastYear: 398,
                                   validFrom: Date().addingTimeInterval(-349 * 86_400),
-                                  validTo: Date().addingTimeInterval(16 * 86_400)))
+                                  validTo: Date().addingTimeInterval(16 * 86_400)),
+                  createRenewalReminder: !calm)
         addDocument(Document(carID: betsy.id, kind: .registration,
                              title: "Registration", subtitle: "Permiso de circulación"))
         addDocument(Document(carID: betsy.id, kind: .inspection,

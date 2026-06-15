@@ -72,8 +72,8 @@ Scripts/convert-fonts.sh /path/to/design_handoff_koi_car_companion/sure-tokens/f
 - **Fonts** use `fixedSize` for pixel-exact mock fidelity; production should adopt
   `relativeTo:` for Dynamic Type.
 - The **light/dark toggle** in `ContentView` is a dev affordance; remove once navigation lands.
-- The Glance is data-driven (active car, Last fill-up, reminders/coming-up). The only
-  sample card left is **Diesel nearby**, until the fuel-price feed lands (P8).
+- The Glance is fully data-driven now — active car, Last fill-up, reminders/coming-up,
+  and **live fuel price** (minetur feed; pick region/fuel in Settings).
 - Persistence is a local JSON file in Application Support (sync-ready: stable UUIDs +
   timestamps). Swap for SwiftData later if wanted.
 
@@ -92,5 +92,7 @@ Scripts/convert-fonts.sh /path/to/design_handoff_koi_car_companion/sure-tokens/f
   one-tap resolve / snooze. ✅
 - **P7** — relationship-aware insurance: owned/lease/finance → policy + Wallet-style card +
   renewal reminder + docs vault; subscription → "Included"; rental → excess/CDW. ✅
-- **P8** — live Spain fuel-price hook ("diesel nearby") + Settings.
+- **P8** — live Spain fuel-price hook: minetur gov feed (province query, BOM/Spanish-format
+  parsing), offline-tolerant cache, cheapest-nearby on the Glance, region/fuel Settings. ✅
+  (Needed a scoped ATS exception — the gov server uses legacy TLS.)
 - **P9** — polish: haptics, spring motion, edge states, per-car accent derivation.
