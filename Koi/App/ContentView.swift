@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// Root router. Empty garage → first run; otherwise → the tabbed app shell.
 /// Theme follows the user's choice in Settings (System / Light / Dark).
@@ -15,14 +16,16 @@ struct ContentView: View {
             }
         }
         .animation(.easeInOut(duration: 0.25), value: garage.isEmpty)
-        .preferredColorScheme(preferredScheme)
+        .onAppear { applyTheme() }
+        .onChange(of: theme) { applyTheme() }
     }
 
-    private var preferredScheme: ColorScheme? {
-        switch theme {
-        case "light": return .light
-        case "dark":  return .dark
-        default:      return nil   // system
+    /// Override the window's interface style — applies the theme everywhere, including
+    /// sheets (which don't reliably inherit `.preferredColorScheme`).
+    private func applyTheme() {
+        let style: UIUserInterfaceStyle = theme == "light" ? .light : (theme == "dark" ? .dark : .unspecified)
+        for scene in UIApplication.shared.connectedScenes {
+            (scene as? UIWindowScene)?.windows.forEach { $0.overrideUserInterfaceStyle = style }
         }
     }
 }

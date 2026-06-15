@@ -21,16 +21,7 @@ struct SettingsView: View {
             }
         }
         .background(KoiColors.surface.ignoresSafeArea())
-        .preferredColorScheme(themeScheme)
         .onChange(of: fuel.provinceID) { Task { await fuel.refresh() } }
-    }
-
-    private var themeScheme: ColorScheme? {
-        switch theme {
-        case "light": return .light
-        case "dark":  return .dark
-        default:      return nil
-        }
     }
 
     private var appearanceSection: some View {

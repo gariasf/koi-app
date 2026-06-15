@@ -9,7 +9,6 @@ struct RentalDetailView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
-                backRow
                 CarAccent.terracotta.tile
                     .frame(height: 170)
                     .clipShape(RoundedRectangle(cornerRadius: KoiRadius.card, style: .continuous))
@@ -28,28 +27,15 @@ struct RentalDetailView: View {
                 }
             }
             .padding(.horizontal, KoiSpace.gutter)
+            .padding(.top, 8)
             .padding(.bottom, 24)
         }
         .background(KoiColors.surface.ignoresSafeArea())
-        .toolbar(.hidden, for: .navigationBar)
-    }
-
-    private var backRow: some View {
-        HStack {
-            Button { dismiss() } label: {
-                HStack(spacing: 4) {
-                    Image(systemName: "chevron.left").font(.system(size: 15, weight: .medium))
-                    Text("Garage").koiStyle(.body)
-                }
-                .foregroundStyle(KoiColors.textSecondary)
-                .padding(.vertical, 8)
-                .padding(.trailing, 12)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            Spacer()
-        }
-        .padding(.top, 8)
+        .navigationTitle(rental.car.displayName)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(KoiColors.surface, for: .navigationBar)
+        .toolbarBackground(.visible, for: .navigationBar)
+        .tint(KoiColors.sage)
     }
 
     private var header: some View {

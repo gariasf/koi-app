@@ -35,6 +35,7 @@ struct GarageView: View {
             .padding(.bottom, 16)
         }
         .background(KoiColors.surface.ignoresSafeArea())
+        .navigationTitle("Garage")
         .toolbar(.hidden, for: .navigationBar)
         .navigationDestination(for: Car.self) { car in
             CarDetailView(car: car)

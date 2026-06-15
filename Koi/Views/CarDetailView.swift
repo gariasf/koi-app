@@ -19,7 +19,6 @@ struct CarDetailView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
-                backRow
                 CarPhotoTile(car: car, height: 190)
                     .clipShape(RoundedRectangle(cornerRadius: KoiRadius.card, style: .continuous))
                 header
@@ -29,10 +28,20 @@ struct CarDetailView: View {
                 timeline
             }
             .padding(.horizontal, KoiSpace.gutter)
+            .padding(.top, 8)
             .padding(.bottom, 24)
         }
         .background(KoiColors.surface.ignoresSafeArea())
-        .toolbar(.hidden, for: .navigationBar)
+        .navigationTitle(car.displayName)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(KoiColors.surface, for: .navigationBar)
+        .toolbarBackground(.visible, for: .navigationBar)
+        .tint(KoiColors.sage)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button("Edit") { activeSheet = .edit }
+            }
+        }
         .sheet(item: $activeSheet) { which in
             sheetContent(which).presentationDragIndicator(.visible)
         }
@@ -52,31 +61,6 @@ struct CarDetailView: View {
                 }
             }
         }
-    }
-
-    private var backRow: some View {
-        HStack {
-            Button { dismiss() } label: {
-                HStack(spacing: 4) {
-                    Image(systemName: "chevron.left").font(.system(size: 15, weight: .medium))
-                    Text("Garage").koiStyle(.body)
-                }
-                .foregroundStyle(KoiColors.textSecondary)
-                .padding(.vertical, 8)
-                .padding(.trailing, 12)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            Spacer()
-            Button { activeSheet = .edit } label: {
-                Text("Edit").koiStyle(.body).foregroundStyle(KoiColors.sageText)
-                    .padding(.vertical, 8)
-                    .padding(.leading, 12)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-        }
-        .padding(.top, 4)
     }
 
     private var header: some View {
