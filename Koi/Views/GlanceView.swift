@@ -1,0 +1,286 @@
+import SwiftUI
+
+// MARK: - Shared Glance building blocks (used across several screens)
+
+enum GlanceTint {
+    case neutral, sage, ochre, red
+
+    var bg: Color {
+        switch self {
+        case .neutral: return KoiColors.insetFill
+        case .sage:    return KoiColors.sageTint
+        case .ochre:   return KoiColors.ochreTint
+        case .red:     return KoiColors.red.opacity(0.12)
+        }
+    }
+    var fg: Color {
+        switch self {
+        case .neutral: return KoiColors.textSecondary
+        case .sage:    return KoiColors.sage
+        case .ochre:   return KoiColors.ochre
+        case .red:     return KoiColors.red
+        }
+    }
+}
+
+/// NOTE: SF Symbols are scaffold placeholders. The handoff specifies Lucide icons.
+struct IconTile: View {
+    let systemName: String
+    var tint: GlanceTint = .neutral
+    var body: some View {
+        RoundedRectangle(cornerRadius: KoiRadius.tile, style: .continuous)
+            .fill(tint.bg)
+            .frame(width: 42, height: 42)
+            .overlay(Image(systemName: systemName).font(.system(size: 18, weight: .regular)).foregroundStyle(tint.fg))
+    }
+}
+
+struct Eyebrow: View {
+    let text: String
+    var body: some View { Text(text).koiStyle(.eyebrow).foregroundStyle(KoiColors.textSubdued) }
+}
+
+/// One compact card: eyebrow + icon tile + (title/subtitle) + optional trailing mono.
+struct GlanceCard: View {
+    let eyebrow: String
+    let icon: String
+    var tint: GlanceTint = .neutral
+    let title: String
+    var titleMono: Bool = false
+    let subtitle: String
+    var trailing: String? = nil
+    var trailingMeta: String? = nil
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Eyebrow(text: eyebrow)
+            HStack(spacing: 12) {
+                IconTile(systemName: icon, tint: tint)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(title).koiStyle(titleMono ? .monoMd : .listTitle).foregroundStyle(KoiColors.textPrimary)
+                    Text(subtitle).koiStyle(.meta).foregroundStyle(KoiColors.textSubdued)
+                }
+                Spacer(minLength: 8)
+                if trailing != nil || trailingMeta != nil {
+                    VStack(alignment: .trailing, spacing: 3) {
+                        if let trailing { Text(trailing).koiStyle(.monoMd).foregroundStyle(KoiColors.textPrimary) }
+                        if let trailingMeta { Text(trailingMeta).koiStyle(.meta).foregroundStyle(KoiColors.textSubdued) }
+                    }
+                }
+            }
+        }
+        .koiCard()
+    }
+}
+
+private extension Urgency {
+    var tile: GlanceTint {
+        switch self {
+        case .neutral:  return .neutral
+        case .comingUp: return .ochre
+        case .overdue:  return .red
+        }
+    }
+    var countdownColor: Color {
+        switch self {
+        case .neutral:  return KoiColors.textSubdued
+        case .comingUp: return KoiColors.ochreText
+        case .overdue:  return KoiColors.red
+        }
+    }
+}
+
+// MARK: - The Glance — adaptive: all-clear (A) when nothing's due, "what's coming" (B) as items approach
+
+struct GlanceView: View {
+    @EnvironmentObject private var garage: Garage
+    @State private var selected: Reminder?
+
+    var body: some View {
+        ZStack {
+            KoiColors.surface.ignoresSafeArea()
+            if garage.isAllClear { directionA } else { directionB }
+        }
+        .sheet(item: $selected) { r in
+            ReminderDetailView(reminder: r)
+                .environmentObject(garage)
+                .presentationDragIndicator(.visible)
+        }
+    }
+
+    // MARK: header (shared)
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(greeting).koiStyle(.glanceLine).foregroundStyle(KoiColors.textPrimary)
+                Text(dateLine).koiStyle(.meta).foregroundStyle(KoiColors.textSubdued)
+            }
+            HStack(spacing: 8) {
+                Circle().fill(KoiColors.sage).frame(width: 9, height: 9)
+                Text(activeCarLine).koiStyle(.body).foregroundStyle(KoiColors.textSecondary)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    // MARK: Direction A — the calm glance
+    private var directionA: some View {
+        VStack(spacing: 0) {
+            header
+            Spacer(minLength: 8)
+            hero
+            Spacer(minLength: 8)
+            VStack(spacing: 12) {
+                if let r = garage.nextHorizon { reminderCardButton(r, eyebrow: "Next up") }
+                lastFillCard
+                dieselCard
+            }
+        }
+        .padding(.horizontal, KoiSpace.gutter)
+        .padding(.vertical, KoiSpace.s2)
+    }
+
+    private var hero: some View {
+        VStack(spacing: 14) {
+            RippleMark(size: 44)
+            Text("All clear").koiStyle(.allClearHero).foregroundStyle(KoiColors.textPrimary)
+            Text("Nothing due for the next six weeks.")
+                .koiStyle(.body).foregroundStyle(KoiColors.textSecondary)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .background(alignment: .top) { Bloom().offset(y: -24) }
+    }
+
+    // MARK: Direction B — what's coming
+    private var directionB: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                header
+                Text(comingUpLine)
+                    .koiStyle(.glanceLine).foregroundStyle(KoiColors.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                if let featured = garage.comingUp.first { featuredCard(featured) }
+
+                let rest = Array(garage.sortedReminders.dropFirst())
+                if !rest.isEmpty {
+                    Eyebrow(text: "Also coming up").padding(.top, 4)
+                    VStack(spacing: 0) {
+                        ForEach(Array(rest.enumerated()), id: \.element.id) { idx, r in
+                            Button { selected = r } label: {
+                                reminderRow(r, last: idx == rest.count - 1)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .koiCard(padding: 0)
+                }
+            }
+            .padding(.horizontal, KoiSpace.gutter)
+            .padding(.vertical, KoiSpace.s2)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private var comingUpLine: String {
+        let car = garage.comingUpHeadlineCar?.displayName ?? "your garage"
+        return "A few things coming up — mostly the \(car)."
+    }
+
+    private func featuredCard(_ r: Reminder) -> some View {
+        Button { selected = r } label: {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(spacing: 12) {
+                    IconTile(systemName: r.kind.icon, tint: garage.urgency(r).tile)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Next up · \(r.title)").koiStyle(.listTitle).foregroundStyle(KoiColors.textPrimary)
+                        Text(r.detail).koiStyle(.meta).foregroundStyle(KoiColors.textSecondary)
+                    }
+                    Spacer(minLength: 8)
+                }
+                HStack {
+                    Spacer()
+                    Text(garage.countdown(r)).koiStyle(.monoMd).foregroundStyle(garage.urgency(r).countdownColor)
+                }
+            }
+            .koiCard(fill: KoiColors.ochreTint)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func reminderRow(_ r: Reminder, last: Bool) -> some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 12) {
+                IconTile(systemName: r.kind.icon, tint: garage.urgency(r).tile)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(r.title).koiStyle(.listTitle).foregroundStyle(KoiColors.textPrimary)
+                    Text(r.detail).koiStyle(.meta).foregroundStyle(KoiColors.textSubdued)
+                }
+                Spacer(minLength: 8)
+                Text(garage.countdown(r)).koiStyle(.monoMd).foregroundStyle(garage.urgency(r).countdownColor)
+            }
+            .padding(14)
+            if !last {
+                Rectangle().fill(KoiColors.hairline).frame(height: 1).padding(.leading, 14)
+            }
+        }
+    }
+
+    // MARK: cards (Direction A)
+    private func reminderCardButton(_ r: Reminder, eyebrow: String) -> some View {
+        Button { selected = r } label: {
+            GlanceCard(eyebrow: eyebrow, icon: r.kind.icon, tint: garage.urgency(r).tile,
+                       title: r.title, subtitle: r.detail, trailing: garage.countdown(r))
+        }
+        .buttonStyle(.plain)
+    }
+
+    @ViewBuilder private var lastFillCard: some View {
+        if let car = garage.activeCar, let log = garage.latestFuelLog(for: car) {
+            GlanceCard(eyebrow: "Last fill-up", icon: "drop.fill", tint: .sage,
+                       title: lastFillTitle(log), titleMono: true, subtitle: lastFillSubtitle(log))
+        } else {
+            GlanceCard(eyebrow: "Last fill-up", icon: "drop.fill", tint: .sage,
+                       title: "No fill-ups yet", subtitle: "Tap ＋ to log your first")
+        }
+    }
+
+    // TODO (P8): live Spain fuel-price feed.
+    private var dieselCard: some View {
+        GlanceCard(eyebrow: "Diesel nearby", icon: "mappin", tint: .sage,
+                   title: "€1.42 /L", titleMono: true,
+                   subtitle: "Repsol, Av. de Burgos · 800 m", trailingMeta: "2h ago")
+    }
+
+    private func lastFillTitle(_ log: FuelLog) -> String {
+        let money = KoiFormat.money(log.amount, code: log.currency)
+        if let e = garage.efficiencyL100(for: log) { return "\(money) · \(KoiFormat.efficiency(e))" }
+        return money
+    }
+    private func lastFillSubtitle(_ log: FuelLog) -> String {
+        [KoiFormat.shortDate(log.date), log.station].compactMap { $0 }.joined(separator: " · ")
+    }
+
+    // MARK: derived copy
+    private var activeCarLine: String {
+        guard let car = garage.activeCar else { return "No active car" }
+        if let plan = garage.plan(for: car), let provider = plan.provider, !provider.isEmpty {
+            return "\(car.displayName) · \(provider)"
+        }
+        return car.displayName
+    }
+    private var greeting: String {
+        switch Calendar.current.component(.hour, from: Date()) {
+        case 5..<12:  return "Good morning"
+        case 12..<18: return "Good afternoon"
+        default:      return "Good evening"
+        }
+    }
+    private var dateLine: String {
+        Date().formatted(.dateTime.weekday(.wide).day().month(.wide))
+    }
+}
+
+#Preview("All clear") { GlanceView().environmentObject(Garage(persists: false)) }
+#Preview("Coming up") { GlanceView().environmentObject(Garage.preview) }

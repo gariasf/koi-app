@@ -25,7 +25,7 @@ struct RootTabView: View {
     @ViewBuilder private var content: some View {
         switch tab {
         case .glance:
-            GlanceAllClearView()
+            GlanceView()
         case .garage:
             NavigationStack { GarageView() }
         }

@@ -9,6 +9,7 @@ final class Garage: ObservableObject {
     @Published private(set) var plans: [Plan] = []
     @Published private(set) var rentals: [Rental] = []
     @Published private(set) var fuelLogs: [FuelLog] = []
+    @Published private(set) var reminders: [Reminder] = []
     @Published var activeCarID: UUID?
 
     private let persists: Bool
@@ -101,12 +102,125 @@ final class Garage: ObservableObject {
         save()
     }
 
+    func addReminder(_ reminder: Reminder) {
+        reminders.append(reminder)
+        save()
+    }
+
+    func resolve(_ reminder: Reminder) {
+        guard let i = reminders.firstIndex(where: { $0.id == reminder.id }) else { return }
+        reminders[i].resolved = true
+        save()
+    }
+
+    func snooze(_ reminder: Reminder, days: Int = 7) {
+        guard let i = reminders.firstIndex(where: { $0.id == reminder.id }) else { return }
+        reminders[i].snoozedUntil = Date().addingTimeInterval(Double(days) * 86_400)
+        save()
+    }
+
+    // MARK: Status engine (drives the adaptive Glance: all-clear ⇄ coming-up)
+    private let comingUpDays = 21
+    private let comingUpKm = 2_000
+
+    func car(_ id: UUID) -> Car? { cars.first { $0.id == id } }
+
+    func isActive(_ r: Reminder) -> Bool {
+        if r.resolved { return false }
+        if let s = r.snoozedUntil, s > Date() { return false }
+        return true
+    }
+
+    var activeReminders: [Reminder] { reminders.filter { isActive($0) } }
+
+    func urgency(_ r: Reminder) -> Urgency {
+        if r.kind == .mileageCap, let used = r.monthlyUsedKm, let cap = r.monthlyCapKm, cap > 0 {
+            if used > cap { return .overdue }
+            return Double(used) / Double(cap) >= 0.8 ? .comingUp : .neutral
+        }
+        if let due = r.dueMileageKm, let odo = car(r.carID)?.odometerKm {
+            let remaining = due - odo
+            if remaining < 0 { return .overdue }
+            return remaining <= comingUpKm ? .comingUp : .neutral
+        }
+        if let date = r.dueDate {
+            let days = daysUntil(date)
+            if days < 0 { return .overdue }
+            return days <= comingUpDays ? .comingUp : .neutral
+        }
+        return .neutral
+    }
+
+    func countdown(_ r: Reminder) -> String {
+        if r.kind == .mileageCap, let used = r.monthlyUsedKm, let cap = r.monthlyCapKm {
+            return "\(used.formatted())/\(cap.formatted()) km"
+        }
+        if let due = r.dueMileageKm, let odo = car(r.carID)?.odometerKm {
+            let remaining = due - odo
+            return remaining < 0 ? "overdue" : "~\(roundedKm(remaining)) km"
+        }
+        if let date = r.dueDate {
+            let days = daysUntil(date)
+            if days < 0 { return "overdue" }
+            if days == 0 { return "today" }
+            if days <= comingUpDays { return "in \(days) days" }
+            if days <= 90 { return "in \(days / 7) weeks" }
+            return date.formatted(.dateTime.day().month(.abbreviated).year())
+        }
+        return ""
+    }
+
+    /// All active reminders, most urgent first (overdue → coming up → neutral, then soonest).
+    var sortedReminders: [Reminder] {
+        activeReminders.sorted { a, b in
+            let ua = urgency(a).rank, ub = urgency(b).rank
+            if ua != ub { return ua < ub }
+            return soonness(a) < soonness(b)
+        }
+    }
+
+    var comingUp: [Reminder] { sortedReminders.filter { urgency($0) != .neutral } }
+    var isAllClear: Bool { comingUp.isEmpty }
+    /// When all-clear, still show the next horizon (neutral).
+    var nextHorizon: Reminder? { sortedReminders.first }
+
+    /// The car most of the coming-up items belong to ("…mostly the Golf").
+    var comingUpHeadlineCar: Car? {
+        let counts = Dictionary(grouping: comingUp, by: { $0.carID }).mapValues(\.count)
+        guard let topID = counts.max(by: { $0.value < $1.value })?.key else { return nil }
+        return car(topID)
+    }
+
+    private func daysUntil(_ date: Date) -> Int {
+        let cal = Calendar.current
+        let from = cal.startOfDay(for: Date())
+        let to = cal.startOfDay(for: date)
+        return cal.dateComponents([.day], from: from, to: to).day ?? 0
+    }
+
+    private func roundedKm(_ km: Int) -> String {
+        (((km + 25) / 50) * 50).formatted()
+    }
+
+    /// A rough "how soon" score in days, so date and mileage items can be ordered together.
+    private func soonness(_ r: Reminder) -> Double {
+        if let date = r.dueDate { return Double(daysUntil(date)) }
+        if let due = r.dueMileageKm, let odo = car(r.carID)?.odometerKm {
+            return Double(due - odo) / 40.0   // assume ~40 km/day
+        }
+        if let used = r.monthlyUsedKm, let cap = r.monthlyCapKm, cap > 0 {
+            return Double(cap - used) / 50.0
+        }
+        return .greatestFiniteMagnitude
+    }
+
     // MARK: Persistence
     private struct State: Codable {
         var cars: [Car]
         var plans: [Plan]
         var rentals: [Rental]
         var fuelLogs: [FuelLog]?
+        var reminders: [Reminder]?
         var activeCarID: UUID?
     }
 
@@ -124,12 +238,13 @@ final class Garage: ObservableObject {
         plans = state.plans
         rentals = state.rentals
         fuelLogs = state.fuelLogs ?? []
+        reminders = state.reminders ?? []
         activeCarID = state.activeCarID
     }
 
     private func save() {
         guard persists, let url = fileURL else { return }
-        let state = State(cars: cars, plans: plans, rentals: rentals, fuelLogs: fuelLogs, activeCarID: activeCarID)
+        let state = State(cars: cars, plans: plans, rentals: rentals, fuelLogs: fuelLogs, reminders: reminders, activeCarID: activeCarID)
         if let data = try? JSONEncoder().encode(state) {
             try? data.write(to: url, options: .atomic)
         }
@@ -171,6 +286,20 @@ final class Garage: ObservableObject {
                          pickup: Date().addingTimeInterval(-40 * 86_400),
                          dropoff: Date().addingTimeInterval(-36 * 86_400),
                          fuelPolicyFullToFull: true, excess: 1_200, cdwTaken: true, returned: true))
+
+        // Reminders — two coming up (→ Glance Direction B), two on the horizon (neutral)
+        addReminder(Reminder(carID: betsy.id, kind: .inspection, title: "ITV inspection",
+                             detail: "\(betsy.displayName) · biennial check",
+                             dueDate: Date().addingTimeInterval(63 * 86_400)))
+        addReminder(Reminder(carID: betsy.id, kind: .insurance, title: "Insurance renewal",
+                             detail: "\(betsy.displayName) · Mapfre",
+                             dueDate: Date().addingTimeInterval(16 * 86_400)))
+        addReminder(Reminder(carID: betsy.id, kind: .service, title: "Oil & filter service",
+                             detail: betsy.displayName,
+                             dueMileageKm: (betsy.odometerKm ?? 142_300) + 1_500))
+        addReminder(Reminder(carID: tucson.id, kind: .mileageCap, title: "Mileage this month",
+                             detail: "\(tucson.displayName) · Mocean",
+                             monthlyUsedKm: 1_020, monthlyCapKm: 1_500))
 
         activeCarID = betsy.id   // Glance shows the owned car + its fuel logs
     }

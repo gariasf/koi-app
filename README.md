@@ -72,9 +72,8 @@ Scripts/convert-fonts.sh /path/to/design_handoff_koi_car_companion/sure-tokens/f
 - **Fonts** use `fixedSize` for pixel-exact mock fidelity; production should adopt
   `relativeTo:` for Dynamic Type.
 - The **light/dark toggle** in `ContentView` is a dev affordance; remove once navigation lands.
-- On the Glance, the **active-car line** and the **Last fill-up** card are real (read the
-  store). **Next up** and **Diesel nearby** stay static sample until reminders / the
-  fuel-price feed land (P6/P8).
+- The Glance is data-driven (active car, Last fill-up, reminders/coming-up). The only
+  sample card left is **Diesel nearby**, until the fuel-price feed lands (P8).
 - Persistence is a local JSON file in Application Support (sync-ready: stable UUIDs +
   timestamps). Swap for SwiftData later if wanted.
 
@@ -88,7 +87,9 @@ Scripts/convert-fonts.sh /path/to/design_handoff_koi_car_companion/sure-tokens/f
   (derives L/100km, updates Glance + timeline). ✅
 - **P5** — subscription **Swap** (new car joins the lineage, plan continues) + rental
   **Return** (retires to guests). ✅
-- **P6** — coming-up status engine + reminders + Glance Direction B (populated state).
+- **P6** — reminders + status engine (urgency neutral→ochre→overdue, derived countdowns);
+  the Glance is now adaptive: Direction A (all-clear) ⇄ Direction B (what's coming) +
+  one-tap resolve / snooze. ✅
 - **P7** — relationship-aware insurance + Wallet-style card + docs vault.
 - **P8** — live Spain fuel-price hook ("diesel nearby") + Settings.
 - **P9** — polish: haptics, spring motion, edge states, per-car accent derivation.
