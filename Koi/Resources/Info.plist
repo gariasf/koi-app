@@ -39,6 +39,10 @@
 		<string>GeistMono-Medium.ttf</string>
 		<string>GeistMono-Bold.ttf</string>
 	</array>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>comgooglemaps</string>
+	</array>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<!-- Scoped exception: the minetur gov fuel feed uses a legacy TLS config that ATS rejects by default. -->

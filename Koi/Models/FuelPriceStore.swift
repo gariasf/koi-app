@@ -25,8 +25,8 @@ final class FuelPriceStore: ObservableObject {
         }
     }
 
-    /// Cheapest station that sells the selected product.
-    var cheapest: FuelStation? {
+    /// Cheapest station that sells a given product (driven by the active car's fuel type).
+    func cheapest(product: FuelProduct) -> FuelStation? {
         stations
             .filter { product.price($0) != nil }
             .min { (product.price($0) ?? .infinity) < (product.price($1) ?? .infinity) }

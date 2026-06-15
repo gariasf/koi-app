@@ -127,6 +127,18 @@ final class Garage: ObservableObject {
         logEntries.filter { $0.carID == car.id }
     }
 
+    /// Everything spent on a car so far: purchase + fuel + expenses/service + plan cost to date.
+    func totalSpent(on car: Car) -> Decimal {
+        var sum: Decimal = car.purchasePrice ?? 0
+        for f in fuelLogs(for: car) { sum += f.amount }
+        for e in entries(for: car) where e.kind != .note { sum += e.amount ?? 0 }
+        if let p = plan(for: car), p.kind != .owned, let monthly = p.monthlyCost {
+            let months = Calendar.current.dateComponents([.month], from: p.startedAt, to: Date()).month ?? 0
+            sum += monthly * Decimal(max(0, months))
+        }
+        return sum
+    }
+
     func addFuelLog(_ log: FuelLog) {
         fuelLogs.append(log)
         if let i = cars.firstIndex(where: { $0.id == log.carID }),
@@ -352,6 +364,7 @@ final class Garage: ObservableObject {
         var betsy = Car(make: "Volkswagen", model: "Golf")
         betsy.year = 2018; betsy.nickname = "Betsy"; betsy.plate = "4821 KPD"
         betsy.odometerKm = 142_300; betsy.accent = .slate
+        betsy.fuelType = .diesel; betsy.purchasePrice = 18_500
         addOwnedCar(betsy)
         addFuelLog(FuelLog(carID: betsy.id, date: Date().addingTimeInterval(-12 * 86_400),
                            amount: 57.20, liters: 44.0, odometerKm: 141_551, station: "Repsol"))
@@ -368,6 +381,7 @@ final class Garage: ObservableObject {
         let saved = addPlanCar(kona, plan: sub)
         var tucson = Car(make: "Hyundai", model: "Tucson"); tucson.accent = .sage
         tucson.odometerKm = 1_020; tucson.addedAt = Date().addingTimeInterval(-90 * 86_400)
+        tucson.fuelType = .hybrid
         swapCar(in: saved, to: tucson)
 
         // Guest — a returned rental

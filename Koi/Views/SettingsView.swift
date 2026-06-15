@@ -12,7 +12,6 @@ struct SettingsView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     appearanceSection
-                    fuelTypeSection
                     regionSection
                     footer
                 }
@@ -41,18 +40,6 @@ struct SettingsView: View {
                 seg("System", active: theme == "system") { theme = "system" }
                 seg("Light", active: theme == "light") { theme = "light" }
                 seg("Dark", active: theme == "dark") { theme = "dark" }
-            }
-            .padding(4)
-            .background(KoiColors.insetFill, in: Capsule())
-        }
-    }
-
-    private var fuelTypeSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Eyebrow(text: "Fuel price")
-            HStack(spacing: 4) {
-                seg("Diesel", active: fuel.product == .diesel) { fuel.product = .diesel }
-                seg("Petrol", active: fuel.product == .petrol) { fuel.product = .petrol }
             }
             .padding(4)
             .background(KoiColors.insetFill, in: Capsule())

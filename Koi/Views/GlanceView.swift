@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 // MARK: - Shared Glance building blocks (used across several screens)
 
@@ -108,7 +109,7 @@ struct GlanceView: View {
             }
         }
         .animation(.easeInOut(duration: 0.3), value: garage.isAllClear)
-        .task { await fuel.refresh(province: garage.activeCar?.fuelRegionID) }
+        .task { await fuel.refresh() }
         .sheet(item: $selected) { r in
             ReminderDetailView(reminder: r)
                 .environmentObject(garage)
@@ -142,7 +143,6 @@ struct GlanceView: View {
                 ForEach(garage.residents) { c in
                     Button {
                         garage.setActiveCar(c.id)
-                        Task { await fuel.refresh(province: c.fuelRegionID) }
                     } label: {
                         if c.id == garage.activeCar?.id {
                             Label(c.displayName, systemImage: "checkmark")
@@ -177,7 +177,7 @@ struct GlanceView: View {
                 VStack(spacing: 12) {
                     if let r = garage.nextHorizon { reminderCardButton(r, eyebrow: "Next up") }
                     lastFillCard
-                    dieselCard
+                    fuelCard
                 }
             }
             Spacer(minLength: 0)
@@ -285,29 +285,48 @@ struct GlanceView: View {
     }
 
     @ViewBuilder private var lastFillCard: some View {
-        if let car = garage.activeCar, let log = garage.latestFuelLog(for: car) {
-            GlanceCard(eyebrow: "Last fill-up", icon: "drop.fill", tint: .sage,
-                       title: lastFillTitle(log), titleMono: true, subtitle: lastFillSubtitle(log))
-        } else {
-            GlanceCard(eyebrow: "Last fill-up", icon: "drop.fill", tint: .sage,
-                       title: "No fill-ups yet", subtitle: "Tap ＋ to log your first")
+        if garage.activeCar?.fuel != .electric {
+            if let car = garage.activeCar, let log = garage.latestFuelLog(for: car) {
+                GlanceCard(eyebrow: "Last fill-up", icon: "drop.fill", tint: .sage,
+                           title: lastFillTitle(log), titleMono: true, subtitle: lastFillSubtitle(log))
+            } else {
+                GlanceCard(eyebrow: "Last fill-up", icon: "drop.fill", tint: .sage,
+                           title: "No fill-ups yet", subtitle: "Tap ＋ to log your first")
+            }
         }
     }
 
-    // Live local fuel price (minetur feed) — tap to pick region.
-    @ViewBuilder private var dieselCard: some View {
-        Button { showSettings = true } label: {
-            if let s = fuel.cheapest, let price = fuel.product.price(s) {
-                GlanceCard(eyebrow: fuel.product.nearbyEyebrow, icon: "mappin", tint: .sage,
-                           title: KoiFormat.pricePerLiter(price), titleMono: true,
-                           subtitle: "\(s.brand) · \(s.municipality)",
-                           trailingMeta: fuel.freshnessText.isEmpty ? nil : fuel.freshnessText)
+    // Live local fuel price for the active car's fuel (minetur feed). Tap → Maps directions
+    // to the station. Hidden for electric / gas (no petrol-diesel price).
+    @ViewBuilder private var fuelCard: some View {
+        if let product = garage.activeCar?.fuel.nearbyProduct {
+            if let s = fuel.cheapest(product: product), let price = product.price(s) {
+                Button { openDirections(to: s) } label: {
+                    GlanceCard(eyebrow: product.nearbyEyebrow, icon: "mappin", tint: .sage,
+                               title: KoiFormat.pricePerLiter(price), titleMono: true,
+                               subtitle: "\(s.brand) · \(s.municipality)",
+                               trailingMeta: fuel.freshnessText.isEmpty ? nil : fuel.freshnessText)
+                }
+                .buttonStyle(.plain)
             } else {
-                GlanceCard(eyebrow: "Fuel nearby", icon: "mappin", tint: .sage,
-                           title: "Pick your region", subtitle: "Set a province to see live prices")
+                Button { showSettings = true } label: {
+                    GlanceCard(eyebrow: product.nearbyEyebrow, icon: "mappin", tint: .sage,
+                               title: "No prices yet", subtitle: "Check your region in Settings")
+                }
+                .buttonStyle(.plain)
             }
         }
-        .buttonStyle(.plain)
+    }
+
+    private func openDirections(to s: FuelStation) {
+        guard let lat = s.latitude, let lon = s.longitude else { showSettings = true; return }
+        let dest = "\(lat),\(lon)"
+        if let google = URL(string: "comgooglemaps://?daddr=\(dest)&directionsmode=driving"),
+           UIApplication.shared.canOpenURL(google) {
+            UIApplication.shared.open(google)
+        } else if let apple = URL(string: "http://maps.apple.com/?daddr=\(dest)") {
+            UIApplication.shared.open(apple)
+        }
     }
 
     private func lastFillTitle(_ log: FuelLog) -> String {

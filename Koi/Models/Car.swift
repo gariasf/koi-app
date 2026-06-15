@@ -10,14 +10,26 @@ struct Car: Identifiable, Codable, Hashable {
     var id: UUID = UUID()
     var make: String
     var model: String
-    var year: Int?
+    var year: Int?               // model / build year ("make year")
     var plate: String?
     var odometerKm: Int?
     var nickname: String?
     var accent: CarAccent = .sage
     var photo: Data?
-    var fuelRegionID: String?    // per-car region override for the fuel feed; nil = app default
+    // New fields are optional so existing saved cars keep decoding.
+    var fuelType: FuelType?
+    var registrationYear: Int?   // matriculation
+    var purchaseYear: Int?       // when you got it (esp. second-hand)
+    var powerHP: Int?            // DIN hp / CV
+    var fiscalPowerCV: Double?   // potencia fiscal (CVF) — from the vehicle papers
+    var torqueNm: Int?
+    var purchasePrice: Decimal?
+    var soldPrice: Decimal?      // set when the car leaves the garage (sell flow, later)
     var addedAt: Date = Date()
+
+    var fuel: FuelType { fuelType ?? .petrol }
+    /// Year you've had it from, for "owned since".
+    var ownedSinceYear: Int? { purchaseYear ?? registrationYear ?? year }
 
     /// Nickname wins; otherwise make + model; otherwise a gentle fallback.
     var displayName: String {

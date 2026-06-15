@@ -6,11 +6,12 @@ struct CarDetailView: View {
     @EnvironmentObject private var garage: Garage
     @Environment(\.dismiss) private var dismiss
     let car: Car
-    @State private var showLog = false
-    @State private var showSwap = false
-    @State private var showVault = false
-    @State private var showEdit = false
-    @State private var showAddReminder = false
+    @State private var activeSheet: CarSheet?
+
+    private enum CarSheet: Int, Identifiable {
+        case log, vault, edit, addReminder, swap
+        var id: Int { rawValue }
+    }
 
     private var plan: Plan? { garage.plan(for: car) }
     private var canSwap: Bool { plan?.allowsSwap == true }
@@ -24,6 +25,7 @@ struct CarDetailView: View {
                 header
                 actions
                 planCard
+                detailsCard
                 timeline
             }
             .padding(.horizontal, KoiSpace.gutter)
@@ -31,25 +33,23 @@ struct CarDetailView: View {
         }
         .background(KoiColors.surface.ignoresSafeArea())
         .toolbar(.hidden, for: .navigationBar)
-        .sheet(isPresented: $showLog) {
-            LogSheetView(car: car).environmentObject(garage).presentationDragIndicator(.visible)
+        .sheet(item: $activeSheet) { which in
+            sheetContent(which).presentationDragIndicator(.visible)
         }
-        .sheet(isPresented: $showVault) {
-            InsuranceVaultView(car: car).environmentObject(garage).presentationDragIndicator(.visible)
-        }
-        .sheet(isPresented: $showEdit) {
-            EditCarView(car: car).environmentObject(garage).presentationDragIndicator(.visible)
-        }
-        .sheet(isPresented: $showAddReminder) {
-            AddReminderView(car: car).environmentObject(garage).presentationDragIndicator(.visible)
-        }
-        .sheet(isPresented: $showSwap) {
+    }
+
+    @ViewBuilder private func sheetContent(_ which: CarSheet) -> some View {
+        switch which {
+        case .log:         LogSheetView(car: car).environmentObject(garage)
+        case .vault:       InsuranceVaultView(car: car).environmentObject(garage)
+        case .edit:        EditCarView(car: car).environmentObject(garage)
+        case .addReminder: AddReminderView(car: car).environmentObject(garage)
+        case .swap:
             if let plan {
                 NavigationStack {
-                    AddSwapCarView(plan: plan, currentCar: car) { showSwap = false }
+                    AddSwapCarView(plan: plan, currentCar: car) { activeSheet = nil }
                         .environmentObject(garage)
                 }
-                .presentationDragIndicator(.visible)
             }
         }
     }
@@ -68,7 +68,7 @@ struct CarDetailView: View {
             }
             .buttonStyle(.plain)
             Spacer()
-            Button { showEdit = true } label: {
+            Button { activeSheet = .edit } label: {
                 Text("Edit").koiStyle(.body).foregroundStyle(KoiColors.sageText)
                     .padding(.vertical, 8)
                     .padding(.leading, 12)
@@ -115,26 +115,54 @@ struct CarDetailView: View {
             if let odo = car.odometerKm {
                 Text(KoiFormat.km(odo)).koiStyle(.monoSm).foregroundStyle(KoiColors.textSecondary)
             }
-            Text(sinceText).koiStyle(.meta).foregroundStyle(KoiColors.textSubdued)
+            Text(car.fuel.label).koiStyle(.meta).foregroundStyle(KoiColors.textSubdued)
             Spacer(minLength: 0)
         }
     }
 
-    private var sinceText: String {
-        if let plan, plan.kind != .owned {
-            return "since \(plan.startedAt.formatted(.dateTime.month(.abbreviated).year()))"
+    // Cost lives on the car page, never on the Glance.
+    @ViewBuilder private var detailsCard: some View {
+        let spent = garage.totalSpent(on: car)
+        VStack(alignment: .leading, spacing: 10) {
+            Eyebrow(text: "Cost & details")
+            if spent > 0 {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(KoiFormat.money(spent)).koiStyle(.monoLg).foregroundStyle(KoiColors.textPrimary)
+                    Text("spent so far").koiStyle(.meta).foregroundStyle(KoiColors.textSubdued)
+                }
+            }
+            if !specsLine.isEmpty {
+                Text(specsLine).koiStyle(.meta).foregroundStyle(KoiColors.textSecondary)
+            }
+            Text(ownershipLine).koiStyle(.meta).foregroundStyle(KoiColors.textSubdued)
         }
-        if let year = car.year { return "owned since \(String(year))" }
-        return "owned"
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .koiCard()
+    }
+
+    private var specsLine: String {
+        var parts: [String] = []
+        if let hp = car.powerHP { parts.append("\(hp) CV") }
+        if let cvf = car.fiscalPowerCV { parts.append("\(cvf.formatted()) CVF") }
+        if let nm = car.torqueNm { parts.append("\(nm) Nm") }
+        return parts.joined(separator: " · ")
+    }
+
+    private var ownershipLine: String {
+        if let plan, plan.kind != .owned {
+            return "On a \(plan.kind.label.lowercased()) since \(plan.startedAt.formatted(.dateTime.month(.abbreviated).year()))"
+        }
+        if let year = car.ownedSinceYear { return "Owned since \(String(year))" }
+        return "Owned"
     }
 
     private var actions: some View {
         HStack(spacing: 10) {
-            actionTile("Log", "square.and.pencil") { showLog = true }
-            actionTile("Remind", "bell") { showAddReminder = true }
-            actionTile("Docs", "folder") { showVault = true }
+            actionTile("Log", "square.and.pencil") { activeSheet = .log }
+            actionTile("Remind", "bell") { activeSheet = .addReminder }
+            actionTile("Docs", "folder") { activeSheet = .vault }
             if canSwap {
-                actionTile("Swap", "arrow.triangle.2.circlepath") { showSwap = true }
+                actionTile("Swap", "arrow.triangle.2.circlepath") { activeSheet = .swap }
             }
         }
     }

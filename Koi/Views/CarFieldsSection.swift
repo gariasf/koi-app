@@ -3,7 +3,7 @@ import PhotosUI
 import UIKit
 
 /// Editable car fields, shared by every flow that creates or edits a resident car
-/// (owned / on-a-plan / edit). Keeps the forms spatially + behaviourally identical.
+/// (owned / on-a-plan / edit). Basics stay visible; specs hide under "More details".
 struct CarFormData {
     var photoData: Data?
     var makeModel = ""
@@ -11,7 +11,14 @@ struct CarFormData {
     var odometer = ""
     var plate = ""
     var nickname = ""
-    var fuelRegionID: String?
+    var fuelType: FuelType = .petrol
+    // advanced / optional
+    var registrationYear = ""
+    var purchaseYear = ""
+    var power = ""
+    var fiscalPower = ""
+    var torque = ""
+    var purchasePrice = ""
 
     init() {}
 
@@ -22,12 +29,17 @@ struct CarFormData {
         odometer = car.odometerKm.map(String.init) ?? ""
         plate = car.plate ?? ""
         nickname = car.nickname ?? ""
-        fuelRegionID = car.fuelRegionID
+        fuelType = car.fuel
+        registrationYear = car.registrationYear.map(String.init) ?? ""
+        purchaseYear = car.purchaseYear.map(String.init) ?? ""
+        power = car.powerHP.map(String.init) ?? ""
+        fiscalPower = car.fiscalPowerCV.map { String($0) } ?? ""
+        torque = car.torqueNm.map(String.init) ?? ""
+        purchasePrice = car.purchasePrice.map { NSDecimalNumber(decimal: $0).stringValue } ?? ""
     }
 
     var isValid: Bool { !makeModel.trimmingCharacters(in: .whitespaces).isEmpty }
 
-    /// Write the fields onto a car (new or existing), deriving the accent from a new photo.
     func apply(to car: inout Car) {
         let trimmed = makeModel.trimmingCharacters(in: .whitespaces)
         let parts = trimmed.split(separator: " ", maxSplits: 1).map(String.init)
@@ -39,7 +51,13 @@ struct CarFormData {
         car.plate = p.isEmpty ? nil : p
         let n = nickname.trimmingCharacters(in: .whitespaces)
         car.nickname = n.isEmpty ? nil : n
-        car.fuelRegionID = fuelRegionID
+        car.fuelType = fuelType
+        car.registrationYear = Int(registrationYear.filter(\.isNumber))
+        car.purchaseYear = Int(purchaseYear.filter(\.isNumber))
+        car.powerHP = Int(power.filter(\.isNumber))
+        car.fiscalPowerCV = Double(fiscalPower.replacingOccurrences(of: ",", with: "."))
+        car.torqueNm = Int(torque.filter(\.isNumber))
+        car.purchasePrice = Decimal(string: purchasePrice.filter { $0.isNumber || $0 == "." })
         car.photo = photoData
         if let photoData, let image = UIImage(data: photoData) {
             car.accent = CarAccent.derive(from: image)
@@ -50,6 +68,7 @@ struct CarFormData {
 struct CarFieldsSection: View {
     @Binding var data: CarFormData
     @State private var photoItem: PhotosPickerItem?
+    @State private var showMore = false
 
     var body: some View {
         VStack(spacing: 16) {
@@ -62,6 +81,57 @@ struct CarFieldsSection: View {
             KoiField(label: "Plate (optional)", placeholder: "4821 KPD", text: $data.plate, mono: true, uppercased: true)
             KoiField(label: "Nickname (optional)", placeholder: "Betsy", text: $data.nickname,
                      hint: "Shown instead of the model")
+            fuelTypePicker
+            moreDetails
+        }
+    }
+
+    private var fuelTypePicker: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Fuel type").koiStyle(.eyebrow).foregroundStyle(KoiColors.textSubdued)
+            Menu {
+                Picker("Fuel type", selection: $data.fuelType) {
+                    ForEach(FuelType.allCases) { Text($0.label).tag($0) }
+                }
+            } label: {
+                HStack {
+                    Text(data.fuelType.label).koiStyle(.body).foregroundStyle(KoiColors.textPrimary)
+                    Spacer()
+                    Image(systemName: "chevron.up.chevron.down").font(.system(size: 12)).foregroundStyle(KoiColors.textSubdued)
+                }
+                .padding(.horizontal, 14).padding(.vertical, 12)
+                .background(KoiColors.fieldFill, in: RoundedRectangle(cornerRadius: KoiRadius.field, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: KoiRadius.field, style: .continuous).strokeBorder(KoiColors.border, lineWidth: 1))
+            }
+        }
+    }
+
+    @ViewBuilder private var moreDetails: some View {
+        Button { withAnimation(.easeInOut(duration: 0.2)) { showMore.toggle() } } label: {
+            HStack(spacing: 6) {
+                Text(showMore ? "Fewer details" : "More details").koiStyle(.body)
+                Image(systemName: showMore ? "chevron.up" : "chevron.down").font(.system(size: 12, weight: .semibold))
+                Spacer()
+            }
+            .foregroundStyle(KoiColors.sageText)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .padding(.top, 2)
+
+        if showMore {
+            HStack(alignment: .top, spacing: 12) {
+                KoiField(label: "First registered", placeholder: "2018", text: $data.registrationYear, keyboard: .numberPad)
+                KoiField(label: "Bought", placeholder: "2021", text: $data.purchaseYear, keyboard: .numberPad)
+            }
+            HStack(alignment: .top, spacing: 12) {
+                KoiField(label: "Power (CV)", placeholder: "150", text: $data.power, mono: true, keyboard: .numberPad)
+                KoiField(label: "Torque (Nm)", placeholder: "320", text: $data.torque, mono: true, keyboard: .numberPad)
+            }
+            KoiField(label: "Fiscal power (CVF)", placeholder: "11.88", text: $data.fiscalPower, mono: true,
+                     keyboard: .decimalPad, hint: "From the vehicle papers (ficha técnica)")
+            KoiField(label: "Purchase price (€)", placeholder: "18,500", text: $data.purchasePrice, mono: true,
+                     keyboard: .numberPad, grouped: true)
         }
     }
 
