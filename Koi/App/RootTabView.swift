@@ -6,7 +6,8 @@ enum KoiTab { case glance, garage }
 /// with a raised central ＋ Log that presents the quick-add sheet for the active car.
 struct RootTabView: View {
     @EnvironmentObject private var garage: Garage
-    @State private var tab: KoiTab = .glance
+    @State private var tab: KoiTab =
+        ProcessInfo.processInfo.arguments.contains("-garage") ? .garage : .glance
     @State private var showLog = false
 
     var body: some View {

@@ -1,8 +1,8 @@
 import Foundation
 import Combine
 
-/// Local-first store for the whole garage. Residents (owned/lease/finance/subscription,
-/// via plans) + guests (rentals) + fuel logs. Persists to JSON in Application Support.
+/// Local-first store for the whole garage. Residents (current car of each plan) +
+/// guests (rentals) + fuel logs. Persists to JSON in Application Support.
 @MainActor
 final class Garage: ObservableObject {
     @Published private(set) var cars: [Car] = []
@@ -15,7 +15,9 @@ final class Garage: ObservableObject {
 
     init(persists: Bool = true) {
         self.persists = persists
-        if persists { load() }
+        if persists {
+            if ProcessInfo.processInfo.arguments.contains("-seed") { seed() } else { load() }
+        }
     }
 
     // MARK: Derived
@@ -23,8 +25,15 @@ final class Garage: ObservableObject {
     var activeCar: Car? { cars.first { $0.id == activeCarID } ?? cars.first }
     func plan(for car: Car) -> Plan? { plans.first { $0.carIDs.contains(car.id) } }
 
-    /// Residents = cars that sit on a plan (owned/lease/finance/subscription).
-    var residents: [Car] { cars }
+    /// One card per plan — the *current* car (lineage of prior cars lives in detail).
+    var residents: [Car] {
+        plans.compactMap { plan in cars.first { $0.id == plan.currentCarID } }
+    }
+
+    /// The ordered cars that have occupied a plan (oldest → current).
+    func lineage(for plan: Plan) -> [Car] {
+        plan.carIDs.compactMap { id in cars.first { $0.id == id } }
+    }
 
     func fuelLogs(for car: Car) -> [FuelLog] {
         fuelLogs.filter { $0.carID == car.id }.sorted { $0.date < $1.date }
@@ -51,7 +60,6 @@ final class Garage: ObservableObject {
         save()
     }
 
-    /// Add a car on a plan (lease/finance/subscription). Creates the plan + sets active.
     @discardableResult
     func addPlanCar(_ car: Car, plan: Plan) -> Plan {
         var plan = plan
@@ -63,14 +71,29 @@ final class Garage: ObservableObject {
         return plan
     }
 
+    /// The Plan ▸ Car proof: the same plan continues, the new car joins the lineage,
+    /// cost/reminders/mileage carry over, the prior car retires into history.
+    func swapCar(in plan: Plan, to newCar: Car) {
+        guard let pIdx = plans.firstIndex(where: { $0.id == plan.id }) else { return }
+        cars.append(newCar)
+        plans[pIdx].carIDs.append(newCar.id)
+        activeCarID = newCar.id
+        save()
+    }
+
     func addRental(_ rental: Rental) {
         rentals.append(rental)
         save()
     }
 
+    func markReturned(_ rental: Rental) {
+        guard let i = rentals.firstIndex(where: { $0.id == rental.id }) else { return }
+        rentals[i].returned = true
+        save()
+    }
+
     func addFuelLog(_ log: FuelLog) {
         fuelLogs.append(log)
-        // keep the car's odometer in step with the latest reading
         if let i = cars.firstIndex(where: { $0.id == log.carID }),
            log.odometerKm > (cars[i].odometerKm ?? 0) {
             cars[i].odometerKm = log.odometerKm
@@ -112,21 +135,43 @@ final class Garage: ObservableObject {
         }
     }
 
-    // MARK: Previews
+    // MARK: Sample data (SwiftUI previews + the `-seed` launch arg)
     static var preview: Garage {
         let g = Garage(persists: false)
-        var betsy = Car(make: "Volkswagen", model: "Golf")
-        betsy.year = 2018
-        betsy.nickname = "Betsy"
-        betsy.plate = "4821 KPD"
-        betsy.odometerKm = 142_300
-        betsy.accent = .slate
-        g.addOwnedCar(betsy)
-        let id = betsy.id
-        g.addFuelLog(FuelLog(carID: id, date: Date().addingTimeInterval(-12 * 86_400),
-                             amount: 57.20, liters: 44.0, odometerKm: 141_551, station: "Repsol"))
-        g.addFuelLog(FuelLog(carID: id, date: Date().addingTimeInterval(-5 * 86_400),
-                             amount: 61.40, liters: 47.2, odometerKm: 142_300, station: "Repsol"))
+        g.seed()
         return g
+    }
+
+    func seed() {
+        // Owned — Betsy, with two fuel logs (latest derives to 6.3 L/100km)
+        var betsy = Car(make: "Volkswagen", model: "Golf")
+        betsy.year = 2018; betsy.nickname = "Betsy"; betsy.plate = "4821 KPD"
+        betsy.odometerKm = 142_300; betsy.accent = .slate
+        addOwnedCar(betsy)
+        addFuelLog(FuelLog(carID: betsy.id, date: Date().addingTimeInterval(-12 * 86_400),
+                           amount: 57.20, liters: 44.0, odometerKm: 141_551, station: "Repsol"))
+        addFuelLog(FuelLog(carID: betsy.id, date: Date().addingTimeInterval(-5 * 86_400),
+                           amount: 61.40, liters: 47.2, odometerKm: 142_300, station: "Repsol"))
+
+        // Subscription — Mocean, Kona swapped to Tucson (same plan continues)
+        var kona = Car(make: "Hyundai", model: "Kona"); kona.accent = .sage
+        kona.addedAt = Date().addingTimeInterval(-270 * 86_400)
+        var sub = Plan(kind: .subscription)
+        sub.provider = "Mocean"; sub.monthlyCost = 459; sub.mileageCapPerMonth = 1_500
+        sub.includesInsurance = true; sub.includesMaintenance = true; sub.includesRoadside = true
+        sub.allowsSwap = true
+        let saved = addPlanCar(kona, plan: sub)
+        var tucson = Car(make: "Hyundai", model: "Tucson"); tucson.accent = .sage
+        tucson.odometerKm = 1_020; tucson.addedAt = Date().addingTimeInterval(-90 * 86_400)
+        swapCar(in: saved, to: tucson)
+
+        // Guest — a returned rental
+        var fiat = Car(make: "Fiat", model: "500"); fiat.accent = .terracotta
+        addRental(Rental(company: "Europcar", car: fiat,
+                         pickup: Date().addingTimeInterval(-40 * 86_400),
+                         dropoff: Date().addingTimeInterval(-36 * 86_400),
+                         fuelPolicyFullToFull: true, excess: 1_200, cdwTaken: true, returned: true))
+
+        activeCarID = betsy.id   // Glance shows the owned car + its fuel logs
     }
 }

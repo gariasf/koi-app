@@ -1,7 +1,8 @@
 # Xcode / Swift
 DerivedData/
 build/
-*.xcodeproj          # generated from project.yml by `xcodegen generate`
+# Generated from project.yml by `xcodegen generate`
+*.xcodeproj
 *.xcworkspace
 xcuserdata/
 *.xcuserstate

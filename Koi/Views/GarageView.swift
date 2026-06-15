@@ -25,7 +25,8 @@ struct GarageView: View {
                 if !garage.rentals.isEmpty {
                     Eyebrow(text: "Guests · past rentals").padding(.top, 8)
                     ForEach(garage.rentals) { rental in
-                        GuestRow(rental: rental)
+                        NavigationLink(value: rental) { GuestRow(rental: rental) }
+                            .buttonStyle(.plain)
                     }
                 }
             }
@@ -37,6 +38,9 @@ struct GarageView: View {
         .toolbar(.hidden, for: .navigationBar)
         .navigationDestination(for: Car.self) { car in
             CarDetailView(car: car)
+        }
+        .navigationDestination(for: Rental.self) { rental in
+            RentalDetailView(rental: rental)
         }
         .sheet(isPresented: $showAdd) {
             AddCarSheet().environmentObject(garage)

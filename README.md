@@ -23,6 +23,10 @@ open Koi.xcodeproj          # then ⌘R in Xcode (iPhone simulator)
 
 Re-run `xcodegen generate` whenever files are added/removed.
 
+Verified building + running on the iOS 26.5 simulator (iPhone 17). Dev launch args:
+`-seed` loads sample data (owned Betsy + Mocean subscription Kona→Tucson + a returned
+Fiat rental); `-garage` opens on the Garage tab. Used for previews/screenshots.
+
 ## Layout
 
 ```
@@ -82,7 +86,8 @@ Scripts/convert-fonts.sh /path/to/design_handoff_koi_car_companion/sure-tokens/f
   (owned, on-a-plan, rental).
 - **P4** — Garage (residents/guests) · Car detail (timeline) · quick-add Log with keypad
   (derives L/100km, updates Glance + timeline). ✅
-- **P5** — subscription **Swap** + rental **Return** (the Plan▸Car proof).
+- **P5** — subscription **Swap** (new car joins the lineage, plan continues) + rental
+  **Return** (retires to guests). ✅
 - **P6** — coming-up status engine + reminders + Glance Direction B (populated state).
 - **P7** — relationship-aware insurance + Wallet-style card + docs vault.
 - **P8** — live Spain fuel-price hook ("diesel nearby") + Settings.

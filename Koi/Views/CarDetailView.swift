@@ -1,11 +1,16 @@
 import SwiftUI
 
-/// Car detail — owned. Everything about this car; plan layer invisible; no Swap.
+/// Car detail. Owned → plan layer invisible, action is Edit. On a plan that allows it →
+/// the 4th action becomes Swap car, and a plan card + lineage appear.
 struct CarDetailView: View {
     @EnvironmentObject private var garage: Garage
     @Environment(\.dismiss) private var dismiss
     let car: Car
     @State private var showLog = false
+    @State private var showSwap = false
+
+    private var plan: Plan? { garage.plan(for: car) }
+    private var canSwap: Bool { plan?.allowsSwap == true }
 
     var body: some View {
         ScrollView {
@@ -16,6 +21,7 @@ struct CarDetailView: View {
                     .clipShape(RoundedRectangle(cornerRadius: KoiRadius.card, style: .continuous))
                 header
                 actions
+                planCard
                 timeline
             }
             .padding(.horizontal, KoiSpace.gutter)
@@ -24,9 +30,16 @@ struct CarDetailView: View {
         .background(KoiColors.surface.ignoresSafeArea())
         .toolbar(.hidden, for: .navigationBar)
         .sheet(isPresented: $showLog) {
-            LogSheetView(car: car)
-                .environmentObject(garage)
+            LogSheetView(car: car).environmentObject(garage).presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $showSwap) {
+            if let plan {
+                NavigationStack {
+                    AddSwapCarView(plan: plan, currentCar: car) { showSwap = false }
+                        .environmentObject(garage)
+                }
                 .presentationDragIndicator(.visible)
+            }
         }
     }
 
@@ -78,11 +91,17 @@ struct CarDetailView: View {
             if let odo = car.odometerKm {
                 Text(KoiFormat.km(odo)).koiStyle(.monoSm).foregroundStyle(KoiColors.textSecondary)
             }
-            if let year = car.year {
-                Text("owned since \(String(year))").koiStyle(.meta).foregroundStyle(KoiColors.textSubdued)
-            }
+            Text(sinceText).koiStyle(.meta).foregroundStyle(KoiColors.textSubdued)
             Spacer(minLength: 0)
         }
+    }
+
+    private var sinceText: String {
+        if let plan, plan.kind != .owned {
+            return "since \(plan.startedAt.formatted(.dateTime.month(.abbreviated).year()))"
+        }
+        if let year = car.year { return "owned since \(String(year))" }
+        return "owned"
     }
 
     private var actions: some View {
@@ -90,7 +109,11 @@ struct CarDetailView: View {
             actionTile("Log", "square.and.pencil") { showLog = true }
             actionTile("Remind", "bell") { }
             actionTile("Docs", "folder") { }
-            actionTile("Edit", "pencil") { }
+            if canSwap {
+                actionTile("Swap car", "arrow.triangle.2.circlepath") { showSwap = true }
+            } else {
+                actionTile("Edit", "pencil") { }
+            }
         }
     }
 
@@ -111,22 +134,67 @@ struct CarDetailView: View {
         .buttonStyle(.plain)
     }
 
+    @ViewBuilder private var planCard: some View {
+        if let plan, plan.kind != .owned {
+            VStack(alignment: .leading, spacing: 6) {
+                Eyebrow(text: plan.kind.label)
+                Text(planLine(plan)).koiStyle(.monoMd).foregroundStyle(KoiColors.textPrimary)
+                if plan.allowsSwap {
+                    Text("Swappable · the plan continues across cars")
+                        .koiStyle(.meta).foregroundStyle(KoiColors.textSubdued)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .koiCard()
+        }
+    }
+
+    private func planLine(_ plan: Plan) -> String {
+        var parts: [String] = []
+        if let p = plan.provider, !p.isEmpty { parts.append(p) }
+        if let m = plan.monthlyCost { parts.append(KoiFormat.money(m) + "/mo") }
+        if let cap = plan.mileageCapPerMonth { parts.append("\(cap) km/mo cap") }
+        return parts.joined(separator: " · ")
+    }
+
+    // merged timeline: fuel logs + swap-in / origin event, newest first
     private var timeline: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        let items = timelineItems
+        return VStack(alignment: .leading, spacing: 12) {
             Eyebrow(text: "Timeline")
-            let logs = Array(garage.fuelLogs(for: car).reversed())   // newest first
-            if logs.isEmpty {
+            if items.isEmpty {
                 Text("No events yet. Log a fill-up to start the timeline.")
                     .koiStyle(.body).foregroundStyle(KoiColors.textSubdued)
             } else {
-                ForEach(Array(logs.enumerated()), id: \.element.id) { idx, log in
-                    TimelineRow(title: timelineTitle(log),
-                                subtitle: timelineSubtitle(log),
-                                isLast: idx == logs.count - 1)
+                ForEach(Array(items.enumerated()), id: \.offset) { idx, item in
+                    TimelineRow(title: item.title, subtitle: item.subtitle, isLast: idx == items.count - 1)
                 }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private struct TLItem { let date: Date; let title: String; let subtitle: String }
+
+    private var timelineItems: [TLItem] {
+        var items: [TLItem] = []
+        for log in garage.fuelLogs(for: car) {
+            items.append(TLItem(date: log.date, title: timelineTitle(log), subtitle: timelineSubtitle(log)))
+        }
+        if let plan {
+            let lineage = garage.lineage(for: plan)
+            if let idx = lineage.firstIndex(of: car), idx > 0 {
+                let prev = lineage[idx - 1]
+                items.append(TLItem(date: car.addedAt,
+                                    title: "Swapped \(prev.displayName) → \(car.displayName)",
+                                    subtitle: "Same plan continued · \(plan.provider ?? "")"))
+            } else {
+                items.append(TLItem(date: car.addedAt,
+                                    title: plan.kind == .owned ? "Bought" : "Joined \(plan.provider ?? "the plan")",
+                                    subtitle: KoiFormat.shortDate(car.addedAt)))
+            }
+        }
+        return items.sorted { $0.date > $1.date }
     }
 
     private func timelineTitle(_ log: FuelLog) -> String {
@@ -169,6 +237,6 @@ struct TimelineRow: View {
 }
 
 #Preview {
-    NavigationStack { CarDetailView(car: Garage.preview.residents.first!) }
+    NavigationStack { CarDetailView(car: Garage.preview.residents.last!) }
         .environmentObject(Garage.preview)
 }
