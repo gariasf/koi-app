@@ -12,7 +12,12 @@ struct CarPhotoTile: View {
             if let data = car.photo, let image = UIImage(data: data) {
                 Image(uiImage: image).resizable().scaledToFill()
             } else {
-                car.accent.tile
+                ZStack {
+                    car.accent.tile
+                    Image(systemName: "car.fill")          // tasteful per-car silhouette stand-in
+                        .font(.system(size: min(48, height * 0.34)))
+                        .foregroundStyle(car.accent.text.opacity(0.40))
+                }
             }
         }
         .frame(maxWidth: .infinity)

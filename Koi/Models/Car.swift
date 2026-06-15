@@ -26,12 +26,16 @@ struct Car: Identifiable, Codable, Hashable {
         return mm.isEmpty ? "Your car" : mm
     }
 
-    /// "Volkswagen Golf · 2018" — shown under the display name when a nickname is used.
+    /// Secondary line under the display name. Avoids repeating the title: when there's a
+    /// nickname the subtitle carries make/model (+year); otherwise just the year (or empty).
     var subtitle: String {
-        var parts: [String] = []
         let mm = [make, model].filter { !$0.isEmpty }.joined(separator: " ")
-        if !mm.isEmpty { parts.append(mm) }
-        if let year { parts.append(String(year)) }
-        return parts.joined(separator: " · ")
+        if let nickname, !nickname.isEmpty {
+            var parts: [String] = []
+            if !mm.isEmpty { parts.append(mm) }
+            if let year { parts.append(String(year)) }
+            return parts.joined(separator: " · ")
+        }
+        return year.map(String.init) ?? ""
     }
 }

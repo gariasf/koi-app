@@ -115,7 +115,9 @@ struct GlanceView: View {
                 .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showSettings) {
-            SettingsView().environmentObject(fuel).presentationDragIndicator(.visible)
+            SettingsView().environmentObject(fuel)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
         }
     }
 
@@ -177,9 +179,10 @@ struct GlanceView: View {
                 lastFillCard
                 dieselCard
             }
+            .padding(.bottom, KoiSpace.s4)   // breathing room above the tab bar / ＋ Log
         }
         .padding(.horizontal, KoiSpace.gutter)
-        .padding(.vertical, KoiSpace.s2)
+        .padding(.top, KoiSpace.s2)
     }
 
     private var hero: some View {
@@ -227,7 +230,7 @@ struct GlanceView: View {
 
     private var comingUpLine: String {
         let car = garage.comingUpHeadlineCar?.displayName ?? "your garage"
-        return "A few things coming up — mostly the \(car)."
+        return "A few things coming up — mostly \(car)."
     }
 
     private func featuredCard(_ r: Reminder) -> some View {
@@ -236,8 +239,8 @@ struct GlanceView: View {
                 HStack(spacing: 12) {
                     IconTile(systemName: r.kind.icon, tint: garage.urgency(r).tile)
                     VStack(alignment: .leading, spacing: 3) {
-                        Text("Next up · \(r.title)").koiStyle(.listTitle).foregroundStyle(KoiColors.textPrimary)
-                        Text(r.detail).koiStyle(.meta).foregroundStyle(KoiColors.textSecondary)
+                        Text("Next up · \(r.title)").koiStyle(.listTitle).foregroundStyle(KoiColors.textPrimary).lineLimit(1)
+                        Text(r.detail).koiStyle(.meta).foregroundStyle(KoiColors.textSecondary).lineLimit(1)
                     }
                     Spacer(minLength: 8)
                 }
@@ -256,11 +259,12 @@ struct GlanceView: View {
             HStack(spacing: 12) {
                 IconTile(systemName: r.kind.icon, tint: garage.urgency(r).tile)
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(r.title).koiStyle(.listTitle).foregroundStyle(KoiColors.textPrimary)
-                    Text(r.detail).koiStyle(.meta).foregroundStyle(KoiColors.textSubdued)
+                    Text(r.title).koiStyle(.listTitle).foregroundStyle(KoiColors.textPrimary).lineLimit(1)
+                    Text(r.detail).koiStyle(.meta).foregroundStyle(KoiColors.textSubdued).lineLimit(1)
                 }
-                Spacer(minLength: 8)
-                Text(garage.countdown(r)).koiStyle(.monoMd).foregroundStyle(garage.urgency(r).countdownColor)
+                Spacer(minLength: 10)
+                Text(garage.countdown(r)).koiStyle(.monoSm).foregroundStyle(garage.urgency(r).countdownColor)
+                    .lineLimit(1).fixedSize(horizontal: true, vertical: false)
             }
             .padding(14)
             if !last {

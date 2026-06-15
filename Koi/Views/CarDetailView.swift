@@ -78,7 +78,9 @@ struct CarDetailView: View {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(car.displayName).koiStyle(.carName).foregroundStyle(KoiColors.textPrimary)
-                    Text(car.subtitle).koiStyle(.body).foregroundStyle(KoiColors.textSecondary)
+                    if !car.subtitle.isEmpty {
+                        Text(car.subtitle).koiStyle(.body).foregroundStyle(KoiColors.textSecondary)
+                    }
                 }
                 Spacer(minLength: 8)
                 statusPill

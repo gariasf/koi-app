@@ -102,8 +102,7 @@ struct ResidentCard: View {
     }
 
     private var metaLine: String {
-        if let provider, !provider.isEmpty { return "\(provider) · \(car.subtitle)" }
-        return car.subtitle
+        [provider, car.subtitle].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
     }
 }
 
