@@ -1,0 +1,224 @@
+import SwiftUI
+
+// MARK: - Icon-tile tint
+
+enum GlanceTint {
+    case neutral, sage, ochre
+
+    var bg: Color {
+        switch self {
+        case .neutral: return KoiColors.insetFill
+        case .sage:    return KoiColors.sageTint
+        case .ochre:   return KoiColors.ochreTint
+        }
+    }
+    var fg: Color {
+        switch self {
+        case .neutral: return KoiColors.textSecondary
+        case .sage:    return KoiColors.sage
+        case .ochre:   return KoiColors.ochre
+        }
+    }
+}
+
+// MARK: - Small building blocks
+
+/// NOTE: SF Symbols are scaffold placeholders. The handoff specifies Lucide icons
+/// (1.5–1.6px stroke, rounded). Production must bundle Lucide and swap these.
+struct IconTile: View {
+    let systemName: String
+    var tint: GlanceTint = .neutral
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: KoiRadius.tile, style: .continuous)
+            .fill(tint.bg)
+            .frame(width: 42, height: 42)
+            .overlay(
+                Image(systemName: systemName)
+                    .font(.system(size: 18, weight: .regular))
+                    .foregroundStyle(tint.fg)
+            )
+    }
+}
+
+struct Eyebrow: View {
+    let text: String
+    var body: some View {
+        Text(text).koiStyle(.eyebrow).foregroundStyle(KoiColors.textSubdued)
+    }
+}
+
+/// One compact Glance card: eyebrow + icon tile + (title/subtitle) + optional trailing mono.
+struct GlanceCard: View {
+    let eyebrow: String
+    let icon: String
+    var tint: GlanceTint = .neutral
+    let title: String
+    var titleMono: Bool = false
+    let subtitle: String
+    var trailing: String? = nil
+    var trailingMeta: String? = nil
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Eyebrow(text: eyebrow)
+            HStack(spacing: 12) {
+                IconTile(systemName: icon, tint: tint)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(title)
+                        .koiStyle(titleMono ? .monoMd : .listTitle)
+                        .foregroundStyle(KoiColors.textPrimary)
+                    Text(subtitle)
+                        .koiStyle(.meta)
+                        .foregroundStyle(KoiColors.textSubdued)
+                }
+                Spacer(minLength: 8)
+                if trailing != nil || trailingMeta != nil {
+                    VStack(alignment: .trailing, spacing: 3) {
+                        if let trailing {
+                            Text(trailing).koiStyle(.monoMd).foregroundStyle(KoiColors.textPrimary)
+                        }
+                        if let trailingMeta {
+                            Text(trailingMeta).koiStyle(.meta).foregroundStyle(KoiColors.textSubdued)
+                        }
+                    }
+                }
+            }
+        }
+        .koiCard()
+    }
+}
+
+// MARK: - Glance · Direction A ("the calm glance" / all-clear state)
+
+struct GlanceAllClearView: View {
+    var body: some View {
+        ZStack {
+            KoiColors.surface.ignoresSafeArea()
+
+            VStack(spacing: 0) {
+                header
+                Spacer(minLength: 8)
+                hero
+                Spacer(minLength: 8)
+                cards
+            }
+            .padding(.horizontal, KoiSpace.gutter)
+            .padding(.top, KoiSpace.s2)
+            .padding(.bottom, KoiSpace.s2)
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) { tabBar }
+    }
+
+    // greeting + date + active car
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(greeting).koiStyle(.glanceLine).foregroundStyle(KoiColors.textPrimary)
+                Text(dateLine).koiStyle(.meta).foregroundStyle(KoiColors.textSubdued)
+            }
+            HStack(spacing: 8) {
+                Circle().fill(KoiColors.sage).frame(width: 9, height: 9)
+                Text("Hyundai Tucson · Mocean")
+                    .koiStyle(.body)
+                    .foregroundStyle(KoiColors.textSecondary)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    // breathing bloom behind ripple mark + "All clear" + calm sub
+    private var hero: some View {
+        VStack(spacing: 14) {
+            RippleMark(size: 44)
+            Text("All clear")
+                .koiStyle(.allClearHero)
+                .foregroundStyle(KoiColors.textPrimary)
+            Text("Nothing due for the next six weeks.")
+                .koiStyle(.body)
+                .foregroundStyle(KoiColors.textSecondary)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .background(alignment: .top) { Bloom().offset(y: -24) }
+    }
+
+    // bottom-anchored stack of three compact cards
+    private var cards: some View {
+        VStack(spacing: 12) {
+            GlanceCard(eyebrow: "Next up", icon: "calendar", tint: .neutral,
+                       title: "ITV inspection", subtitle: "Betsy · roadworthiness",
+                       trailing: "14 Aug", trailingMeta: "in 9 weeks")
+            GlanceCard(eyebrow: "Last fill-up", icon: "drop.fill", tint: .sage,
+                       title: "€61.40 · 6.3 L/100km", titleMono: true,
+                       subtitle: "Tue, 10 Jun · Repsol")
+            GlanceCard(eyebrow: "Diesel nearby", icon: "mappin", tint: .sage,
+                       title: "€1.42 /L", titleMono: true,
+                       subtitle: "Repsol, Av. de Burgos · 800 m",
+                       trailingMeta: "2h ago")
+        }
+    }
+
+    // custom bottom bar: Glance · raised ＋ Log · Garage
+    private var tabBar: some View {
+        HStack(spacing: 0) {
+            tabItem(label: "Glance", active: true) {
+                RippleMark(size: 24, color: KoiColors.sage)
+            }
+            Spacer(minLength: 0)
+            logButton
+            Spacer(minLength: 0)
+            tabItem(label: "Garage", active: false) {
+                Image(systemName: "square.grid.2x2")
+                    .font(.system(size: 20, weight: .regular))
+                    .foregroundStyle(KoiColors.textSubdued)
+            }
+        }
+        .padding(.horizontal, 44)
+        .padding(.top, 12)
+        .padding(.bottom, 4)
+        .background(KoiColors.surface)
+        .overlay(alignment: .top) {
+            Rectangle().fill(KoiColors.hairline).frame(height: 1)
+        }
+    }
+
+    private func tabItem<Icon: View>(label: String,
+                                     active: Bool,
+                                     @ViewBuilder icon: () -> Icon) -> some View {
+        VStack(spacing: 4) {
+            icon()
+            Text(label).koiStyle(.tabLabel)
+                .foregroundStyle(active ? KoiColors.textPrimary : KoiColors.textSubdued)
+        }
+    }
+
+    private var logButton: some View {
+        Circle()
+            .fill(KoiColors.sage)
+            .frame(width: 56, height: 56)
+            .overlay(
+                Image(systemName: "plus")
+                    .font(.system(size: 22, weight: .medium))
+                    .foregroundStyle(.white)
+            )
+            .shadow(color: KoiColors.sage.opacity(0.35), radius: 10, x: 0, y: 4)
+            .offset(y: -16)
+            .accessibilityLabel("Log")
+    }
+
+    // MARK: derived copy
+    private var greeting: String {
+        switch Calendar.current.component(.hour, from: Date()) {
+        case 5..<12:  return "Good morning"
+        case 12..<18: return "Good afternoon"
+        default:      return "Good evening"
+        }
+    }
+    private var dateLine: String {
+        Date().formatted(.dateTime.weekday(.wide).day().month(.wide))
+    }
+}
+
+#Preview("Glance · light") { ContentView().preferredColorScheme(.light) }
+#Preview("Glance · dark")  { ContentView().preferredColorScheme(.dark) }

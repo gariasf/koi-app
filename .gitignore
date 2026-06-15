@@ -1,0 +1,17 @@
+# Xcode / Swift
+DerivedData/
+build/
+*.xcodeproj          # generated from project.yml by `xcodegen generate`
+*.xcworkspace
+xcuserdata/
+*.xcuserstate
+*.xcscmblueprint
+.swiftpm/
+Packages/
+*.moved-aside
+
+# macOS
+.DS_Store
+
+# Tooling
+*.log
