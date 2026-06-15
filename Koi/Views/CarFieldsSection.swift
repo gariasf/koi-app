@@ -57,9 +57,9 @@ struct CarFieldsSection: View {
             KoiField(label: "Make & model", placeholder: "Volkswagen Golf", text: $data.makeModel)
             HStack(alignment: .top, spacing: 12) {
                 KoiField(label: "Year", placeholder: "2018", text: $data.year, keyboard: .numberPad)
-                KoiField(label: "Odometer", placeholder: "142,300 km", text: $data.odometer, mono: true, keyboard: .numberPad)
+                KoiField(label: "Odometer", placeholder: "142,300", text: $data.odometer, mono: true, keyboard: .numberPad, grouped: true)
             }
-            KoiField(label: "Plate (optional)", placeholder: "4821 KPD", text: $data.plate, mono: true)
+            KoiField(label: "Plate (optional)", placeholder: "4821 KPD", text: $data.plate, mono: true, uppercased: true)
             KoiField(label: "Nickname (optional)", placeholder: "Betsy", text: $data.nickname,
                      hint: "Shown instead of the model")
         }

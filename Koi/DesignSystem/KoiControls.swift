@@ -9,14 +9,18 @@ struct KoiField: View {
     var mono: Bool = false
     var keyboard: UIKeyboardType = .default
     var hint: String? = nil
+    var uppercased: Bool = false   // identifiers only (plate, policy no.) — locale-independent
+    var grouped: Bool = false      // numeric input shown with the locale's thousands separator
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(label).koiStyle(.eyebrow).foregroundStyle(KoiColors.textSubdued)
-            TextField(placeholder, text: $text)
+            TextField(placeholder, text: fieldBinding)
                 .koiStyle(mono ? .monoMd : .body)
                 .foregroundStyle(KoiColors.textPrimary)
                 .keyboardType(keyboard)
+                .textInputAutocapitalization(uppercased ? .characters : nil)
+                .autocorrectionDisabled(uppercased)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 11)
                 .background(KoiColors.fieldFill, in: RoundedRectangle(cornerRadius: KoiRadius.field, style: .continuous))
@@ -29,6 +33,24 @@ struct KoiField: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var fieldBinding: Binding<String> {
+        if uppercased {
+            // locale-independent — plates/policy numbers are ASCII A–Z (avoids Turkish i→İ)
+            return Binding(get: { text }, set: { text = $0.uppercased() })
+        }
+        if grouped {
+            return Binding(
+                get: {
+                    let digits = text.filter(\.isNumber)
+                    guard let n = Int(digits) else { return "" }
+                    return n.formatted(.number.grouping(.automatic))
+                },
+                set: { text = String($0.filter(\.isNumber)) }
+            )
+        }
+        return $text
     }
 }
 

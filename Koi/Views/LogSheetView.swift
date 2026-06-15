@@ -108,7 +108,7 @@ struct LogSheetView: View {
                 KoiField(label: "Amount", placeholder: "€0", text: $amount, mono: true, keyboard: .decimalPad)
             }
             if type == .service {
-                KoiField(label: "Odometer", placeholder: "142,300 km", text: $odometer, mono: true, keyboard: .numberPad)
+                KoiField(label: "Odometer", placeholder: "142,300", text: $odometer, mono: true, keyboard: .numberPad, grouped: true)
             }
             noteField
             Spacer(minLength: 0)

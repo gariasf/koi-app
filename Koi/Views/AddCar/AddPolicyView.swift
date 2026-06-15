@@ -21,7 +21,7 @@ struct AddPolicyView: View {
             ScrollView {
                 VStack(spacing: 16) {
                     KoiField(label: "Insurer", placeholder: "Mapfre", text: $insurer)
-                    KoiField(label: "Policy number", placeholder: "ES-4471 8820", text: $number, mono: true)
+                    KoiField(label: "Policy number", placeholder: "ES-4471 8820", text: $number, mono: true, uppercased: true)
                     KoiField(label: "Coverage", placeholder: "Comprehensive", text: $coverage)
                     KoiField(label: "Premium / yr", placeholder: "€412", text: $premium, keyboard: .numberPad)
                     VStack(alignment: .leading, spacing: 6) {

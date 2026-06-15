@@ -108,6 +108,7 @@ struct CarDetailView: View {
         HStack(spacing: 10) {
             if let plate = car.plate, !plate.isEmpty {
                 Text(plate).koiStyle(.monoSm).foregroundStyle(KoiColors.textPrimary)
+                    .textCase(.uppercase)
                     .padding(.horizontal, 8).padding(.vertical, 4)
                     .background(KoiColors.insetFill, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
             }
