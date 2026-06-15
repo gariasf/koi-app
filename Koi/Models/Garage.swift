@@ -10,6 +10,8 @@ final class Garage: ObservableObject {
     @Published private(set) var rentals: [Rental] = []
     @Published private(set) var fuelLogs: [FuelLog] = []
     @Published private(set) var reminders: [Reminder] = []
+    @Published private(set) var policies: [InsurancePolicy] = []
+    @Published private(set) var documents: [Document] = []
     @Published var activeCarID: UUID?
 
     private let persists: Bool
@@ -119,6 +121,54 @@ final class Garage: ObservableObject {
         save()
     }
 
+    // MARK: Insurance & documents (relationship-aware)
+    func policy(for car: Car) -> InsurancePolicy? { policies.first { $0.carID == car.id } }
+    func carDocuments(for car: Car) -> [Document] { documents.filter { $0.carID == car.id } }
+
+    /// True when insurance is bundled into the car's plan (subscription) — no policy to add.
+    func insuranceIncludedInPlan(for car: Car) -> Bool {
+        guard let plan = plan(for: car) else { return false }
+        return plan.kind != .owned && plan.includesInsurance
+    }
+
+    func addPolicy(_ policy: InsurancePolicy, createRenewalReminder: Bool = true) {
+        policies.append(policy)
+        if createRenewalReminder, let due = policy.validTo {
+            let name = car(policy.carID)?.displayName ?? "Your car"
+            reminders.append(Reminder(carID: policy.carID, kind: .insurance,
+                                      title: "Insurance renewal",
+                                      detail: "\(name) · \(policy.insurer)", dueDate: due))
+        }
+        save()
+    }
+
+    func addDocument(_ document: Document) {
+        documents.append(document)
+        save()
+    }
+
+    /// Close the renewal loop: roll the policy forward a year, remember last year's premium,
+    /// resolve the active insurance reminder, and schedule next year's.
+    func renew(_ policy: InsurancePolicy) {
+        guard let i = policies.firstIndex(where: { $0.id == policy.id }) else { return }
+        let cal = Calendar.current
+        if let to = policies[i].validTo {
+            policies[i].premiumLastYear = policies[i].premium
+            policies[i].validFrom = to
+            policies[i].validTo = cal.date(byAdding: .year, value: 1, to: to)
+        }
+        for r in reminders where r.kind == .insurance && r.carID == policy.carID && isActive(r) {
+            resolve(r)
+        }
+        if let due = policies[i].validTo {
+            let name = car(policy.carID)?.displayName ?? "Your car"
+            reminders.append(Reminder(carID: policy.carID, kind: .insurance,
+                                      title: "Insurance renewal",
+                                      detail: "\(name) · \(policy.insurer)", dueDate: due))
+        }
+        save()
+    }
+
     // MARK: Status engine (drives the adaptive Glance: all-clear ⇄ coming-up)
     private let comingUpDays = 21
     private let comingUpKm = 2_000
@@ -221,6 +271,8 @@ final class Garage: ObservableObject {
         var rentals: [Rental]
         var fuelLogs: [FuelLog]?
         var reminders: [Reminder]?
+        var policies: [InsurancePolicy]?
+        var documents: [Document]?
         var activeCarID: UUID?
     }
 
@@ -239,12 +291,16 @@ final class Garage: ObservableObject {
         rentals = state.rentals
         fuelLogs = state.fuelLogs ?? []
         reminders = state.reminders ?? []
+        policies = state.policies ?? []
+        documents = state.documents ?? []
         activeCarID = state.activeCarID
     }
 
     private func save() {
         guard persists, let url = fileURL else { return }
-        let state = State(cars: cars, plans: plans, rentals: rentals, fuelLogs: fuelLogs, reminders: reminders, activeCarID: activeCarID)
+        let state = State(cars: cars, plans: plans, rentals: rentals, fuelLogs: fuelLogs,
+                          reminders: reminders, policies: policies, documents: documents,
+                          activeCarID: activeCarID)
         if let data = try? JSONEncoder().encode(state) {
             try? data.write(to: url, options: .atomic)
         }
@@ -291,15 +347,23 @@ final class Garage: ObservableObject {
         addReminder(Reminder(carID: betsy.id, kind: .inspection, title: "ITV inspection",
                              detail: "\(betsy.displayName) · biennial check",
                              dueDate: Date().addingTimeInterval(63 * 86_400)))
-        addReminder(Reminder(carID: betsy.id, kind: .insurance, title: "Insurance renewal",
-                             detail: "\(betsy.displayName) · Mapfre",
-                             dueDate: Date().addingTimeInterval(16 * 86_400)))
         addReminder(Reminder(carID: betsy.id, kind: .service, title: "Oil & filter service",
                              detail: betsy.displayName,
                              dueMileageKm: (betsy.odometerKm ?? 142_300) + 1_500))
         addReminder(Reminder(carID: tucson.id, kind: .mileageCap, title: "Mileage this month",
                              detail: "\(tucson.displayName) · Mocean",
                              monthlyUsedKm: 1_020, monthlyCapKm: 1_500))
+
+        // Insurance — Betsy carries a Mapfre policy (auto-creates the renewal reminder, 16 days)
+        addPolicy(InsurancePolicy(carID: betsy.id, insurer: "Mapfre",
+                                  policyNumber: "ES-4471 8820", coverage: "Comprehensive",
+                                  premium: 412, premiumLastYear: 398,
+                                  validFrom: Date().addingTimeInterval(-349 * 86_400),
+                                  validTo: Date().addingTimeInterval(16 * 86_400)))
+        addDocument(Document(carID: betsy.id, kind: .registration,
+                             title: "Registration", subtitle: "Permiso de circulación"))
+        addDocument(Document(carID: betsy.id, kind: .inspection,
+                             title: "ITV certificate", subtitle: "Valid to Aug 2024"))
 
         activeCarID = betsy.id   // Glance shows the owned car + its fuel logs
     }

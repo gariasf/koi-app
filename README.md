@@ -90,6 +90,7 @@ Scripts/convert-fonts.sh /path/to/design_handoff_koi_car_companion/sure-tokens/f
 - **P6** — reminders + status engine (urgency neutral→ochre→overdue, derived countdowns);
   the Glance is now adaptive: Direction A (all-clear) ⇄ Direction B (what's coming) +
   one-tap resolve / snooze. ✅
-- **P7** — relationship-aware insurance + Wallet-style card + docs vault.
+- **P7** — relationship-aware insurance: owned/lease/finance → policy + Wallet-style card +
+  renewal reminder + docs vault; subscription → "Included"; rental → excess/CDW. ✅
 - **P8** — live Spain fuel-price hook ("diesel nearby") + Settings.
 - **P9** — polish: haptics, spring motion, edge states, per-car accent derivation.

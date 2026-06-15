@@ -8,6 +8,7 @@ struct CarDetailView: View {
     let car: Car
     @State private var showLog = false
     @State private var showSwap = false
+    @State private var showVault = false
 
     private var plan: Plan? { garage.plan(for: car) }
     private var canSwap: Bool { plan?.allowsSwap == true }
@@ -31,6 +32,9 @@ struct CarDetailView: View {
         .toolbar(.hidden, for: .navigationBar)
         .sheet(isPresented: $showLog) {
             LogSheetView(car: car).environmentObject(garage).presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $showVault) {
+            InsuranceVaultView(car: car).environmentObject(garage).presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showSwap) {
             if let plan {
@@ -108,7 +112,7 @@ struct CarDetailView: View {
         HStack(spacing: 10) {
             actionTile("Log", "square.and.pencil") { showLog = true }
             actionTile("Remind", "bell") { }
-            actionTile("Docs", "folder") { }
+            actionTile("Docs", "folder") { showVault = true }
             if canSwap {
                 actionTile("Swap car", "arrow.triangle.2.circlepath") { showSwap = true }
             } else {

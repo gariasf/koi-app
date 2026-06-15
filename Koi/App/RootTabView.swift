@@ -9,6 +9,7 @@ struct RootTabView: View {
     @State private var tab: KoiTab =
         ProcessInfo.processInfo.arguments.contains("-garage") ? .garage : .glance
     @State private var showLog = false
+    @State private var showVaultLaunch = ProcessInfo.processInfo.arguments.contains("-vault")
 
     var body: some View {
         content
@@ -16,6 +17,13 @@ struct RootTabView: View {
             .sheet(isPresented: $showLog) {
                 if let car = garage.activeCar {
                     LogSheetView(car: car)
+                        .environmentObject(garage)
+                        .presentationDragIndicator(.visible)
+                }
+            }
+            .sheet(isPresented: $showVaultLaunch) {   // dev deep-link: `-vault`
+                if let car = garage.activeCar {
+                    InsuranceVaultView(car: car)
                         .environmentObject(garage)
                         .presentationDragIndicator(.visible)
                 }

@@ -40,6 +40,10 @@ struct ReminderDetailView: View {
                         infoCard(label: "Due", value: date.formatted(.dateTime.day().month(.wide).year()))
                     }
 
+                    if reminder.kind == .insurance, let policy = policyForReminder {
+                        policyMiniCard(policy)
+                    }
+
                     Text("No rush — Koi will give you a gentle nudge again closer to the time.")
                         .koiStyle(.meta).foregroundStyle(KoiColors.textSubdued)
                         .multilineTextAlignment(.center)
@@ -79,6 +83,33 @@ struct ReminderDetailView: View {
             Text(label).koiStyle(.body).foregroundStyle(KoiColors.textSecondary)
             Spacer()
             Text(value).koiStyle(.body).foregroundStyle(KoiColors.textPrimary)
+        }
+        .koiCard()
+    }
+
+    private var policyForReminder: InsurancePolicy? {
+        garage.policies.first { $0.carID == reminder.carID }
+    }
+
+    private func policyMiniCard(_ p: InsurancePolicy) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Image(systemName: "shield.lefthalf.filled").foregroundStyle(KoiColors.sage)
+                Text(p.insurer).koiStyle(.listTitle).foregroundStyle(KoiColors.textPrimary)
+                Spacer()
+                Text(p.policyNumber).koiStyle(.monoSm).foregroundStyle(KoiColors.textSecondary)
+            }
+            HStack(spacing: 10) {
+                if let prem = p.premium {
+                    Text(KoiFormat.money(prem, code: p.currency) + " / yr")
+                        .koiStyle(.monoMd).foregroundStyle(KoiColors.textPrimary)
+                }
+                if let last = p.premiumLastYear {
+                    Text("last year " + KoiFormat.money(last, code: p.currency))
+                        .koiStyle(.meta).foregroundStyle(KoiColors.textSubdued)
+                }
+                Spacer(minLength: 0)
+            }
         }
         .koiCard()
     }
