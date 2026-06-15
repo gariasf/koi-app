@@ -101,8 +101,13 @@ struct GlanceView: View {
     var body: some View {
         ZStack {
             KoiColors.surface.ignoresSafeArea()
-            if garage.isAllClear { directionA } else { directionB }
+            if garage.isAllClear {
+                directionA.transition(.opacity)
+            } else {
+                directionB.transition(.opacity)
+            }
         }
+        .animation(.easeInOut(duration: 0.3), value: garage.isAllClear)
         .task { await fuel.refresh() }
         .sheet(item: $selected) { r in
             ReminderDetailView(reminder: r)

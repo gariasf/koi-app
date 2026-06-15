@@ -79,7 +79,7 @@ struct InsuranceVaultView: View {
                 .koiStyle(.meta)
                 .foregroundStyle(soon ? KoiColors.ochreText : KoiColors.textSecondary)
             Spacer()
-            Button { garage.renew(policy) } label: {
+            Button { garage.renew(policy); Haptics.success() } label: {
                 Text("Renew").koiStyle(.body).foregroundStyle(KoiColors.sageText)
             }
             .buttonStyle(.plain)

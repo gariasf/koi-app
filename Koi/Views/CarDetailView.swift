@@ -17,8 +17,7 @@ struct CarDetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 backRow
-                car.accent.tile
-                    .frame(height: 190)
+                CarPhotoTile(car: car, height: 190)
                     .clipShape(RoundedRectangle(cornerRadius: KoiRadius.card, style: .continuous))
                 header
                 actions

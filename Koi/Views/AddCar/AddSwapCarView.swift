@@ -68,6 +68,7 @@ struct AddSwapCarView: View {
         car.odometerKm = Int(odometer.filter(\.isNumber))
         car.accent = currentCar.accent   // keep the slot's colour — same relationship continuing
         garage.swapCar(in: plan, to: car)
+        Haptics.success()
         if let onSaved { onSaved() } else { dismiss() }
     }
 }

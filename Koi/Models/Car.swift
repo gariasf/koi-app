@@ -15,6 +15,7 @@ struct Car: Identifiable, Codable, Hashable {
     var odometerKm: Int?
     var nickname: String?
     var accent: CarAccent = .sage
+    var photo: Data?
     var addedAt: Date = Date()
 
     /// Nickname wins; otherwise make + model; otherwise a gentle fallback.

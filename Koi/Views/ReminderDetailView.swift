@@ -56,7 +56,7 @@ struct ReminderDetailView: View {
 
             VStack(spacing: 10) {
                 KoiPrimaryButton(title: primaryTitle, systemIcon: "checkmark") {
-                    garage.resolve(reminder); dismiss()
+                    garage.resolve(reminder); Haptics.success(); dismiss()
                 }
                 Button { garage.snooze(reminder); dismiss() } label: {
                     Text("Remind me later").koiStyle(.body).foregroundStyle(KoiColors.textSecondary)

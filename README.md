@@ -95,4 +95,8 @@ Scripts/convert-fonts.sh /path/to/design_handoff_koi_car_companion/sure-tokens/f
 - **P8** — live Spain fuel-price hook: minetur gov feed (province query, BOM/Spanish-format
   parsing), offline-tolerant cache, cheapest-nearby on the Glance, region/fuel Settings. ✅
   (Needed a scoped ATS exception — the gov server uses legacy TLS.)
-- **P9** — polish: haptics, spring motion, edge states, per-car accent derivation.
+- **P9** — polish (objective pass): haptics on save/resolve + keypad, Dynamic Type
+  (`relativeTo:` fonts), real `PhotosPicker` + auto per-car accent from the photo, calm
+  A⇄B cross-fade. ✅
+  - Remaining polish: swap SF Symbols → **Lucide** (bundle), illustrated photo stand-ins,
+    plus the user's flagged visual/usability fixes (to be listed).

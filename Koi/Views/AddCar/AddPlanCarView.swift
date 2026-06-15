@@ -130,6 +130,7 @@ struct AddPlanCarView: View {
         plan.allowsSwap = allowsSwap
 
         garage.addPlanCar(car, plan: plan)
+        Haptics.success()
         if let onSaved { onSaved() } else { dismiss() }
     }
 }

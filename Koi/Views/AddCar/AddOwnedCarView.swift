@@ -1,4 +1,6 @@
 import SwiftUI
+import PhotosUI
+import UIKit
 
 /// Add · Owned — the minimal owned-car form. Land on the Glance with this car active.
 struct AddOwnedCarView: View {
@@ -10,6 +12,8 @@ struct AddOwnedCarView: View {
     @State private var year = ""
     @State private var odometer = ""
     @State private var nickname = ""
+    @State private var photoItem: PhotosPickerItem?
+    @State private var photoData: Data?
 
     private var canSave: Bool {
         !makeModel.trimmingCharacters(in: .whitespaces).isEmpty
@@ -44,24 +48,39 @@ struct AddOwnedCarView: View {
         .toolbar(.hidden, for: .navigationBar)
     }
 
-    // TODO: native PhotosPicker (P9); prototype used a drag-drop placeholder.
     private var photoSlot: some View {
-        RoundedRectangle(cornerRadius: KoiRadius.cardSmall, style: .continuous)
-            .fill(KoiColors.insetFill)
-            .frame(height: 150)
-            .overlay(
-                VStack(spacing: 8) {
-                    Image(systemName: "photo.badge.plus")
-                        .font(.system(size: 24, weight: .regular))
-                        .foregroundStyle(KoiColors.textSubdued)
-                    Text("Add a photo (optional)")
-                        .koiStyle(.meta).foregroundStyle(KoiColors.textSubdued)
+        PhotosPicker(selection: $photoItem, matching: .images) {
+            ZStack {
+                if let photoData, let ui = UIImage(data: photoData) {
+                    Image(uiImage: ui).resizable().scaledToFill()
+                } else {
+                    KoiColors.insetFill
+                    VStack(spacing: 8) {
+                        Image(systemName: "photo.badge.plus")
+                            .font(.system(size: 24, weight: .regular))
+                            .foregroundStyle(KoiColors.textSubdued)
+                        Text("Add a photo (optional)")
+                            .koiStyle(.meta).foregroundStyle(KoiColors.textSubdued)
+                    }
                 }
-            )
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 150)
+            .clipShape(RoundedRectangle(cornerRadius: KoiRadius.cardSmall, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: KoiRadius.cardSmall, style: .continuous)
-                    .strokeBorder(KoiColors.border, style: StrokeStyle(lineWidth: 1, dash: [5, 4]))
+                    .strokeBorder(KoiColors.border,
+                                  style: StrokeStyle(lineWidth: 1, dash: photoData == nil ? [5, 4] : []))
             )
+        }
+        .buttonStyle(.plain)
+        .onChange(of: photoItem) {
+            Task {
+                if let data = try? await photoItem?.loadTransferable(type: Data.self) {
+                    photoData = data
+                }
+            }
+        }
     }
 
     private func save() {
@@ -74,8 +93,14 @@ struct AddOwnedCarView: View {
         car.odometerKm = Int(odometer.filter(\.isNumber))
         let nick = nickname.trimmingCharacters(in: .whitespaces)
         car.nickname = nick.isEmpty ? nil : nick
-        car.accent = .slate
+        car.photo = photoData
+        if let photoData, let image = UIImage(data: photoData) {
+            car.accent = CarAccent.derive(from: image)   // auto per-car accent from the photo
+        } else {
+            car.accent = .slate
+        }
         garage.addOwnedCar(car)
+        Haptics.success()
         if let onSaved { onSaved() } else { dismiss() }
     }
 }

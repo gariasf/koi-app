@@ -116,6 +116,7 @@ struct AddRentalView: View {
                             cdwTaken: cdw,
                             returned: false)
         garage.addRental(rental)
+        Haptics.success()
         if let onSaved { onSaved() } else { dismiss() }
     }
 }

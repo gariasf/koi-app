@@ -105,6 +105,7 @@ struct LogSheetView: View {
     }
 
     private func tap(_ key: String) {
+        Haptics.tap()
         switch focus {
         case .amount:   amount = edit(amount, key, decimal: true)
         case .odometer: odometer = edit(odometer, key, decimal: false)
@@ -128,6 +129,7 @@ struct LogSheetView: View {
                           odometerKm: Int(odometer) ?? 0,
                           station: nil)
         garage.addFuelLog(log)
+        Haptics.success()
         dismiss()
     }
 }

@@ -74,7 +74,7 @@ struct ResidentCard: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            car.accent.tile.frame(height: 130)
+            CarPhotoTile(car: car, height: 130)
 
             VStack(alignment: .leading, spacing: 8) {
                 HStack(alignment: .firstTextBaseline) {

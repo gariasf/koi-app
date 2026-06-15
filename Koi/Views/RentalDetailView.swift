@@ -18,6 +18,7 @@ struct RentalDetailView: View {
                 if !rental.returned {
                     KoiPrimaryButton(title: "Mark as returned", systemIcon: "checkmark") {
                         garage.markReturned(rental)
+                        Haptics.success()
                         dismiss()
                     }
                     .padding(.top, 4)
