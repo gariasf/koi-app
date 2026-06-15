@@ -21,7 +21,7 @@ struct AddRentalView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ModalHeader(title: "New car · Rental") { dismiss() }
+            ModalHeader(title: "New car · Rental")
 
             ScrollView {
                 VStack(spacing: 16) {

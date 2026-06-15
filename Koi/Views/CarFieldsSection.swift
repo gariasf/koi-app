@@ -92,7 +92,7 @@ struct CarFieldsSection: View {
         }
         .buttonStyle(.plain)
         .onChange(of: photoItem) {
-            Task {
+            Task { @MainActor in
                 if let d = try? await photoItem?.loadTransferable(type: Data.self) { data.photoData = d }
             }
         }

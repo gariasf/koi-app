@@ -1,7 +1,18 @@
 {
-  "fill" : {
-    "automatic-gradient" : "extended-srgb:0.00000,0.53333,1.00000,1.00000"
-  },
+  "color-space-for-untagged-svg-colors" : "display-p3",
+  "fill-specializations" : [
+    {
+      "value" : {
+        "solid" : "display-p3:0.37939,0.43042,0.32446,1.00000"
+      }
+    },
+    {
+      "appearance" : "dark",
+      "value" : {
+        "solid" : "display-p3:0.11371,0.12537,0.09058,1.00000"
+      }
+    }
+  ],
   "groups" : [
     {
       "layers" : [
@@ -12,47 +23,39 @@
               "value" : "none"
             }
           ],
+          "image-name" : "core-dot.svg",
+          "name" : "core-dot"
+        },
+        {
+          "fill-specializations" : [
+            {
+              "appearance" : "dark",
+              "value" : "none"
+            }
+          ],
+          "image-name" : "ring-1-inner.svg",
+          "name" : "ring-1-inner"
+        },
+        {
+          "fill-specializations" : [
+            {
+              "appearance" : "dark",
+              "value" : "none"
+            }
+          ],
+          "image-name" : "ring-2-mid.svg",
+          "name" : "ring-2-mid"
+        },
+        {
+          "fill-specializations" : [
+            {
+              "appearance" : "dark",
+              "value" : "none"
+            }
+          ],
           "glass" : true,
-          "hidden" : false,
-          "image-name" : "fg-ripple 2.svg",
-          "name" : "fg-ripple 2"
-        }
-      ],
-      "shadow" : {
-        "kind" : "neutral",
-        "opacity" : 0.5
-      },
-      "translucency" : {
-        "enabled" : true,
-        "value" : 0.5
-      }
-    },
-    {
-      "layers" : [
-        {
-          "fill" : "none",
-          "glass" : false,
-          "hidden" : true,
-          "image-name" : "bg-light 2.svg",
-          "name" : "bg-light 2"
-        }
-      ],
-      "shadow" : {
-        "kind" : "neutral",
-        "opacity" : 0.5
-      },
-      "translucency" : {
-        "enabled" : true,
-        "value" : 0.5
-      }
-    },
-    {
-      "layers" : [
-        {
-          "glass" : false,
-          "hidden" : false,
-          "image-name" : "bg-dark 2.svg",
-          "name" : "bg-dark 2"
+          "image-name" : "ring-3-outer.svg",
+          "name" : "ring-3-outer"
         }
       ],
       "shadow" : {

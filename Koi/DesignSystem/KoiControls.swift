@@ -121,25 +121,18 @@ struct KoiToggleRow: View {
 }
 
 /// Modal nav row: Cancel (leading) + centered title, hairline underline.
+/// Centered sheet title. Sheets dismiss via the drag handle (swipe down) — no redundant
+/// Cancel/Done button.
 struct ModalHeader: View {
     let title: String
-    var closeTitle: String = "Cancel"   // "Cancel" for forms, "Done" for read-only detail
-    let onCancel: () -> Void
 
     var body: some View {
-        ZStack {
-            Text(title).koiStyle(.listTitle).foregroundStyle(KoiColors.textPrimary)
-            HStack {
-                Button(action: onCancel) {
-                    Text(closeTitle).koiStyle(.body).foregroundStyle(KoiColors.textSecondary)
-                }
-                Spacer()
+        Text(title).koiStyle(.listTitle).foregroundStyle(KoiColors.textPrimary)
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, KoiSpace.gutter)
+            .padding(.vertical, 14)
+            .overlay(alignment: .bottom) {
+                Rectangle().fill(KoiColors.hairline).frame(height: 1)
             }
-        }
-        .padding(.horizontal, KoiSpace.gutter)
-        .padding(.vertical, 14)
-        .overlay(alignment: .bottom) {
-            Rectangle().fill(KoiColors.hairline).frame(height: 1)
-        }
     }
 }

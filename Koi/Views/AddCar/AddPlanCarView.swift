@@ -14,7 +14,7 @@ struct AddPlanCarView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ModalHeader(title: "New car · On a plan") { dismiss() }
+            ModalHeader(title: "New car · On a plan")
             ScrollView {
                 VStack(spacing: 16) {
                     PlanKindSegmented(kind: $plan.kind)
@@ -28,6 +28,7 @@ struct AddPlanCarView: View {
                 .padding(.top, 18)
                 .padding(.bottom, 12)
             }
+            .scrollDismissesKeyboard(.interactively)
             KoiPrimaryButton(title: "Save plan", enabled: canSave) { save() }
                 .padding(.horizontal, KoiSpace.gutter)
                 .padding(.top, 10)

@@ -18,7 +18,7 @@ struct EditCarView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ModalHeader(title: "Edit car") { dismiss() }
+            ModalHeader(title: "Edit car")
             ScrollView {
                 VStack(spacing: 16) {
                     CarFieldsSection(data: $form)
@@ -35,6 +35,7 @@ struct EditCarView: View {
                 .padding(.top, 18)
                 .padding(.bottom, 12)
             }
+            .scrollDismissesKeyboard(.interactively)
             KoiPrimaryButton(title: "Save changes", enabled: form.isValid) { save() }
                 .padding(.horizontal, KoiSpace.gutter)
                 .padding(.top, 10)

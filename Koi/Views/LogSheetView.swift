@@ -23,7 +23,7 @@ struct LogSheetView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ModalHeader(title: "Log · \(car.displayName)") { dismiss() }
+            ModalHeader(title: "Log · \(car.displayName)")
             typePicker
                 .padding(.horizontal, KoiSpace.gutter)
                 .padding(.top, 14)

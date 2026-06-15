@@ -66,22 +66,12 @@ struct PlanFormData {
 struct PlanKindSegmented: View {
     @Binding var kind: PlanKind
     var body: some View {
-        HStack(spacing: 4) {
-            seg("Lease", .lease)
-            seg("Finance", .finance)
-            seg("Subscription", .subscription)
+        Picker("Plan type", selection: $kind) {
+            Text("Lease").tag(PlanKind.lease)
+            Text("Finance").tag(PlanKind.finance)
+            Text("Subscription").tag(PlanKind.subscription)
         }
-        .padding(4)
-        .background(KoiColors.insetFill, in: Capsule())
-    }
-    private func seg(_ label: String, _ k: PlanKind) -> some View {
-        Button { kind = k } label: {
-            Text(label).koiStyle(.meta)
-                .foregroundStyle(kind == k ? .white : KoiColors.textSecondary)
-                .frame(maxWidth: .infinity).padding(.vertical, 8)
-                .background { if kind == k { Capsule().fill(KoiColors.sage) } }
-        }
-        .buttonStyle(.plain)
+        .pickerStyle(.segmented)
     }
 }
 
@@ -143,18 +133,16 @@ struct PlanFieldsSection: View {
                          isOn: $data.allowsSwap).padding(14)
             if data.allowsSwap {
                 hairline
-                HStack(spacing: 6) {
+                HStack {
                     Text("Swap interval").koiStyle(.body).foregroundStyle(KoiColors.textSecondary)
                     Spacer()
-                    ForEach([3, 6, 12], id: \.self) { m in
-                        Button { data.swapIntervalMonths = m } label: {
-                            Text("\(m) mo").koiStyle(.meta)
-                                .foregroundStyle(data.swapIntervalMonths == m ? .white : KoiColors.textSecondary)
-                                .padding(.horizontal, 12).padding(.vertical, 6)
-                                .background { if data.swapIntervalMonths == m { Capsule().fill(KoiColors.sage) } else { Capsule().fill(KoiColors.insetFill) } }
-                        }
-                        .buttonStyle(.plain)
+                    Picker("Swap interval", selection: $data.swapIntervalMonths) {
+                        Text("3 mo").tag(3)
+                        Text("6 mo").tag(6)
+                        Text("12 mo").tag(12)
                     }
+                    .pickerStyle(.segmented)
+                    .frame(width: 190)
                 }
                 .padding(14)
             }

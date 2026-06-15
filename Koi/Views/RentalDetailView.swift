@@ -42,6 +42,9 @@ struct RentalDetailView: View {
                     Text("Garage").koiStyle(.body)
                 }
                 .foregroundStyle(KoiColors.textSecondary)
+                .padding(.vertical, 8)
+                .padding(.trailing, 12)
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             Spacer()

@@ -16,7 +16,7 @@ struct AddSwapCarView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ModalHeader(title: "Swap car") { dismiss() }
+            ModalHeader(title: "Swap car")
             ScrollView {
                 VStack(spacing: 16) {
                     explainer

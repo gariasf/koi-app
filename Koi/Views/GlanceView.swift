@@ -171,18 +171,20 @@ struct GlanceView: View {
     private var directionA: some View {
         VStack(spacing: 0) {
             header
-            Spacer(minLength: 8)
-            hero
-            Spacer(minLength: 8)
-            VStack(spacing: 12) {
-                if let r = garage.nextHorizon { reminderCardButton(r, eyebrow: "Next up") }
-                lastFillCard
-                dieselCard
+            Spacer(minLength: 0)
+            VStack(spacing: 24) {
+                hero
+                VStack(spacing: 12) {
+                    if let r = garage.nextHorizon { reminderCardButton(r, eyebrow: "Next up") }
+                    lastFillCard
+                    dieselCard
+                }
             }
-            .padding(.bottom, KoiSpace.s4)   // breathing room above the tab bar / ＋ Log
+            Spacer(minLength: 0)
         }
         .padding(.horizontal, KoiSpace.gutter)
         .padding(.top, KoiSpace.s2)
+        .padding(.bottom, KoiSpace.s4)
     }
 
     private var hero: some View {

@@ -135,36 +135,37 @@ struct GuestRow: View {
     }
 }
 
-/// Add-a-car flow launched from the Garage ＋. Pick a relationship → push its form.
+/// Add-a-car flow launched from the Garage ＋. Pick a relationship → its form opens as a
+/// drawer over the picker (swipe it down to go back to the picker; save closes everything).
 struct AddCarSheet: View {
     @EnvironmentObject private var garage: Garage
     @Environment(\.dismiss) private var dismiss
+    @State private var selected: Relationship?
 
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                ModalHeader(title: "Add a car") { dismiss() }
-                ScrollView {
-                    VStack(spacing: 12) {
-                        ForEach(Relationship.allCases) { r in
-                            NavigationLink(value: r) {
-                                OptionRowContent(icon: r.icon, title: r.title, subtitle: r.subtitle)
-                            }
-                            .buttonStyle(.plain)
-                        }
+        VStack(spacing: 0) {
+            ModalHeader(title: "Add a car")
+            ScrollView {
+                VStack(spacing: 12) {
+                    ForEach(Relationship.allCases) { r in
+                        OptionRow(icon: r.icon, title: r.title, subtitle: r.subtitle) { selected = r }
                     }
-                    .padding(.horizontal, KoiSpace.gutter)
-                    .padding(.top, 18)
                 }
+                .padding(.horizontal, KoiSpace.gutter)
+                .padding(.top, 18)
             }
-            .background(KoiColors.surface.ignoresSafeArea())
-            .navigationDestination(for: Relationship.self) { r in
+        }
+        .background(KoiColors.surface.ignoresSafeArea())
+        .sheet(item: $selected) { r in
+            Group {
                 switch r {
-                case .own:    AddOwnedCarView(onSaved: { dismiss() }).environmentObject(garage)
-                case .plan:   AddPlanCarView(onSaved: { dismiss() }).environmentObject(garage)
-                case .borrow: AddRentalView(onSaved: { dismiss() }).environmentObject(garage)
+                case .own:    AddOwnedCarView(onSaved: { dismiss() })
+                case .plan:   AddPlanCarView(onSaved: { dismiss() })
+                case .borrow: AddRentalView(onSaved: { dismiss() })
                 }
             }
+            .environmentObject(garage)
+            .presentationDragIndicator(.visible)
         }
     }
 }

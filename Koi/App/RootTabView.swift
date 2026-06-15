@@ -69,17 +69,14 @@ struct RootTabView: View {
             tabButton(.glance, label: "Glance") {
                 RippleMark(size: 24, color: tab == .glance ? KoiColors.sage : KoiColors.textSubdued)
             }
-            Spacer(minLength: 0)
-            logButton
-            Spacer(minLength: 0)
+            logButton.frame(width: 76)
             tabButton(.garage, label: "Garage") {
                 Image(systemName: "square.grid.2x2")
                     .font(.system(size: 20, weight: .regular))
                     .foregroundStyle(tab == .garage ? KoiColors.textPrimary : KoiColors.textSubdued)
             }
         }
-        .padding(.horizontal, 44)
-        .padding(.top, 12)
+        .padding(.top, 10)
         .padding(.bottom, 4)
         .background(KoiColors.surface)
         .overlay(alignment: .top) {
@@ -102,6 +99,8 @@ struct RootTabView: View {
                 Text(label).koiStyle(.tabLabel)
                     .foregroundStyle(tab == target ? KoiColors.textPrimary : KoiColors.textSubdued)
             }
+            .frame(maxWidth: .infinity, minHeight: 48)   // full-width, generous tap target
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }
@@ -117,7 +116,8 @@ struct RootTabView: View {
                         .foregroundStyle(.white)
                 )
                 .shadow(color: KoiColors.sage.opacity(0.35), radius: 10, x: 0, y: 4)
-                .offset(y: -16)
+                .offset(y: -20)
+                .contentShape(Circle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Log")

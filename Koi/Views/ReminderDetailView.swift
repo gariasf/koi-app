@@ -11,7 +11,7 @@ struct ReminderDetailView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ModalHeader(title: "Reminder", closeTitle: "Done") { dismiss() }
+            ModalHeader(title: "Reminder")
 
             ScrollView {
                 VStack(spacing: 18) {

@@ -10,7 +10,7 @@ struct AddOwnedCarView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ModalHeader(title: "New car · Owned") { dismiss() }
+            ModalHeader(title: "New car · Owned")
             ScrollView {
                 CarFieldsSection(data: $form)
                     .padding(.horizontal, KoiSpace.gutter)

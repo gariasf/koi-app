@@ -54,11 +54,15 @@ struct FirstRunView: View {
             }
         }
         .sheet(item: $presented) { r in
-            switch r {
-            case .own:    AddOwnedCarView().environmentObject(garage)
-            case .plan:   AddPlanCarView().environmentObject(garage)
-            case .borrow: AddRentalView().environmentObject(garage)
+            Group {
+                switch r {
+                case .own:    AddOwnedCarView()
+                case .plan:   AddPlanCarView()
+                case .borrow: AddRentalView()
+                }
             }
+            .environmentObject(garage)
+            .presentationDragIndicator(.visible)
         }
     }
 

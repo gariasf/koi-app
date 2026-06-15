@@ -16,7 +16,7 @@ struct AddPolicyView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ModalHeader(title: "Add a policy") { dismiss() }
+            ModalHeader(title: "Add a policy")
 
             ScrollView {
                 VStack(spacing: 16) {

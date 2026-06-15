@@ -62,15 +62,21 @@ struct CarDetailView: View {
                     Text("Garage").koiStyle(.body)
                 }
                 .foregroundStyle(KoiColors.textSecondary)
+                .padding(.vertical, 8)
+                .padding(.trailing, 12)
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             Spacer()
             Button { showEdit = true } label: {
                 Text("Edit").koiStyle(.body).foregroundStyle(KoiColors.sageText)
+                    .padding(.vertical, 8)
+                    .padding(.leading, 12)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
         }
-        .padding(.top, 8)
+        .padding(.top, 4)
     }
 
     private var header: some View {

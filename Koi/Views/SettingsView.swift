@@ -8,7 +8,7 @@ struct SettingsView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ModalHeader(title: "Settings", closeTitle: "Done") { dismiss() }
+            ModalHeader(title: "Settings")
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     appearanceSection
@@ -22,7 +22,16 @@ struct SettingsView: View {
             }
         }
         .background(KoiColors.surface.ignoresSafeArea())
+        .preferredColorScheme(themeScheme)
         .onChange(of: fuel.provinceID) { Task { await fuel.refresh() } }
+    }
+
+    private var themeScheme: ColorScheme? {
+        switch theme {
+        case "light": return .light
+        case "dark":  return .dark
+        default:      return nil
+        }
     }
 
     private var appearanceSection: some View {

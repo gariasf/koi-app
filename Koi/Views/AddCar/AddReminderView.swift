@@ -16,7 +16,7 @@ struct AddReminderView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ModalHeader(title: "New reminder") { dismiss() }
+            ModalHeader(title: "New reminder")
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     kindPicker
@@ -42,19 +42,12 @@ struct AddReminderView: View {
     }
 
     private var kindPicker: some View {
-        HStack(spacing: 4) {
-            ForEach(kinds, id: \.self) { k in
-                Button { kind = k } label: {
-                    Text(kindLabel(k)).koiStyle(.meta)
-                        .foregroundStyle(kind == k ? .white : KoiColors.textSecondary)
-                        .frame(maxWidth: .infinity).padding(.vertical, 8)
-                        .background { if kind == k { Capsule().fill(KoiColors.sage) } }
-                }
-                .buttonStyle(.plain)
-            }
+        Picker("Type", selection: $kind) {
+            Text("Service").tag(ReminderKind.service)
+            Text("Inspection").tag(ReminderKind.inspection)
+            Text("Insurance").tag(ReminderKind.insurance)
         }
-        .padding(4)
-        .background(KoiColors.insetFill, in: Capsule())
+        .pickerStyle(.segmented)
     }
 
     private func kindLabel(_ k: ReminderKind) -> String {
