@@ -92,6 +92,8 @@ struct GlanceCard: View {
 // MARK: - Glance · Direction A ("the calm glance" / all-clear state)
 
 struct GlanceAllClearView: View {
+    @EnvironmentObject private var garage: Garage
+
     var body: some View {
         ZStack {
             KoiColors.surface.ignoresSafeArea()
@@ -110,7 +112,7 @@ struct GlanceAllClearView: View {
         .safeAreaInset(edge: .bottom, spacing: 0) { tabBar }
     }
 
-    // greeting + date + active car
+    // greeting + date + active car (real, from the store)
     private var header: some View {
         VStack(alignment: .leading, spacing: 12) {
             VStack(alignment: .leading, spacing: 3) {
@@ -119,7 +121,7 @@ struct GlanceAllClearView: View {
             }
             HStack(spacing: 8) {
                 Circle().fill(KoiColors.sage).frame(width: 9, height: 9)
-                Text("Hyundai Tucson · Mocean")
+                Text(activeCarLine)
                     .koiStyle(.body)
                     .foregroundStyle(KoiColors.textSecondary)
             }
@@ -143,7 +145,9 @@ struct GlanceAllClearView: View {
         .background(alignment: .top) { Bloom().offset(y: -24) }
     }
 
-    // bottom-anchored stack of three compact cards
+    // Bottom-anchored stack of three compact cards.
+    // TODO (P4/P6): drive these from real FuelLog / Reminder / fuel-price data.
+    // Static sample content for now so the resting state reads as complete.
     private var cards: some View {
         VStack(spacing: 12) {
             GlanceCard(eyebrow: "Next up", icon: "calendar", tint: .neutral,
@@ -208,6 +212,14 @@ struct GlanceAllClearView: View {
     }
 
     // MARK: derived copy
+    private var activeCarLine: String {
+        guard let car = garage.activeCar else { return "No active car" }
+        if let plan = garage.plan(for: car), let provider = plan.provider, !provider.isEmpty {
+            return "\(car.displayName) · \(provider)"
+        }
+        return car.displayName
+    }
+
     private var greeting: String {
         switch Calendar.current.component(.hour, from: Date()) {
         case 5..<12:  return "Good morning"
@@ -215,10 +227,11 @@ struct GlanceAllClearView: View {
         default:      return "Good evening"
         }
     }
+
     private var dateLine: String {
         Date().formatted(.dateTime.weekday(.wide).day().month(.wide))
     }
 }
 
-#Preview("Glance · light") { ContentView().preferredColorScheme(.light) }
-#Preview("Glance · dark")  { ContentView().preferredColorScheme(.dark) }
+#Preview("Glance · light") { GlanceAllClearView().environmentObject(Garage.preview).preferredColorScheme(.light) }
+#Preview("Glance · dark")  { GlanceAllClearView().environmentObject(Garage.preview).preferredColorScheme(.dark) }

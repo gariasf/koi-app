@@ -1,15 +1,22 @@
 import SwiftUI
 
-/// Scaffold host. Shows the Glance all-clear proof screen and carries a small
-/// dev-only affordance to flip light/dark on device (system · light · dark).
-/// Remove `schemeToggle` once real navigation lands.
+/// Root router. Empty garage → first run; otherwise → the Glance.
+/// Carries a small dev-only light/dark toggle (remove once navigation matures).
 struct ContentView: View {
-    @State private var schemeOverride: ColorScheme? = nil
+    @EnvironmentObject private var garage: Garage
+    @State private var schemeOverride: ColorScheme?
 
     var body: some View {
-        GlanceAllClearView()
-            .preferredColorScheme(schemeOverride)
-            .overlay(alignment: .topTrailing) { schemeToggle }
+        Group {
+            if garage.isEmpty {
+                FirstRunView()
+            } else {
+                GlanceAllClearView()
+            }
+        }
+        .animation(.easeInOut(duration: 0.25), value: garage.isEmpty)
+        .preferredColorScheme(schemeOverride)
+        .overlay(alignment: .topTrailing) { schemeToggle }
     }
 
     private var schemeToggle: some View {
@@ -41,5 +48,6 @@ struct ContentView: View {
     }
 }
 
-#Preview("Light") { ContentView().preferredColorScheme(.light) }
-#Preview("Dark")  { ContentView().preferredColorScheme(.dark) }
+#Preview("First run") { ContentView().environmentObject(Garage(persists: false)) }
+#Preview("Glance · light") { ContentView().environmentObject(Garage.preview).preferredColorScheme(.light) }
+#Preview("Glance · dark") { ContentView().environmentObject(Garage.preview).preferredColorScheme(.dark) }

@@ -68,13 +68,17 @@ Scripts/convert-fonts.sh /path/to/design_handoff_koi_car_companion/sure-tokens/f
 - **Fonts** use `fixedSize` for pixel-exact mock fidelity; production should adopt
   `relativeTo:` for Dynamic Type.
 - The **light/dark toggle** in `ContentView` is a dev affordance; remove once navigation lands.
-- All Glance content is **static sample data**, not a model.
+- The Glance **active-car line is real** (reads the store); the three cards are still
+  **static sample data** until fuel logs / reminders / fuel-price land (P4/P6/P8).
+- Persistence is a local JSON file in Application Support (sync-ready: stable UUIDs +
+  timestamps). Swap for SwiftData later if wanted.
 
 ## Roadmap
 
-- **P1 (now)** — foundation + Glance all-clear proof. ✅
-- **P2** — data spine: `Plan ▸ Car` model (owned/lease/finance/subscription + rental guests).
-- **P3** — first-run (Own/Plan/Borrow) → add owned car → land on a real Glance.
+- **P1** — foundation + Glance all-clear proof. ✅
+- **P2** — data spine: `Plan ▸ Car` model + local-first store (`Garage`). ✅
+- **P3** — first-run (Own/Plan/Borrow) → add owned car → real Glance. ✅ owned path
+  (plan & rental forms still to do).
 - **P4** — Garage (residents/guests) · Car detail · quick-add Log (derive L/100km).
 - **P5** — subscription **Swap** + rental **Return** (the Plan▸Car proof).
 - **P6** — coming-up status engine + reminders + Glance Direction B (populated state).
