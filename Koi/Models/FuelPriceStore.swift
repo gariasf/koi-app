@@ -41,12 +41,12 @@ final class FuelPriceStore: ObservableObject {
         return hrs < 24 ? "\(hrs)h ago" : "\(hrs / 24)d ago"
     }
 
-    func refresh() async {
+    func refresh(province: String? = nil) async {
         guard !isLoading else { return }
         isLoading = true
         defer { isLoading = false }
         do {
-            let fetched = try await service.fetch(provinceID: provinceID)
+            let fetched = try await service.fetch(provinceID: province ?? provinceID)
             if !fetched.isEmpty {
                 stations = fetched
                 lastUpdated = Date()

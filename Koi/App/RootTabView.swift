@@ -11,6 +11,7 @@ struct RootTabView: View {
         ProcessInfo.processInfo.arguments.contains("-garage") ? .garage : .glance
     @State private var showLog = false
     @State private var devScreen: String? = RootTabView.devScreenArg()
+    @State private var garagePath = NavigationPath()
 
     var body: some View {
         content
@@ -43,6 +44,8 @@ struct RootTabView: View {
         case "cardetailsub": if let c = garage.residents.last { NavigationStack { CarDetailView(car: c).environmentObject(garage) } }
         case "addplan":      NavigationStack { AddPlanCarView().environmentObject(garage) }
         case "addowned":     NavigationStack { AddOwnedCarView().environmentObject(garage) }
+        case "editcar":      if let c = garage.residents.first { EditCarView(car: c).environmentObject(garage) }
+        case "editcarsub":   if let c = garage.residents.last { EditCarView(car: c).environmentObject(garage) }
         case "addrental":    NavigationStack { AddRentalView().environmentObject(garage) }
         case "settings":     SettingsView().environmentObject(fuel)
         case "vault":        if let c = garage.residents.first { InsuranceVaultView(car: c).environmentObject(garage) }
@@ -57,7 +60,7 @@ struct RootTabView: View {
         case .glance:
             GlanceView()
         case .garage:
-            NavigationStack { GarageView() }
+            NavigationStack(path: $garagePath) { GarageView() }
         }
     }
 
@@ -87,7 +90,13 @@ struct RootTabView: View {
     private func tabButton<Icon: View>(_ target: KoiTab,
                                        label: String,
                                        @ViewBuilder icon: () -> Icon) -> some View {
-        Button { tab = target } label: {
+        Button {
+            if tab == target {
+                if target == .garage { garagePath = NavigationPath() }   // re-tap active tab → back to list
+            } else {
+                tab = target
+            }
+        } label: {
             VStack(spacing: 4) {
                 icon()
                 Text(label).koiStyle(.tabLabel)

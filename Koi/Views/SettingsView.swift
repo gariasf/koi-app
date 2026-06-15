@@ -4,12 +4,14 @@ import SwiftUI
 struct SettingsView: View {
     @EnvironmentObject private var fuel: FuelPriceStore
     @Environment(\.dismiss) private var dismiss
+    @AppStorage("koi.theme") private var theme = "system"
 
     var body: some View {
         VStack(spacing: 0) {
             ModalHeader(title: "Settings") { dismiss() }
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
+                    appearanceSection
                     fuelTypeSection
                     regionSection
                     footer
@@ -21,6 +23,19 @@ struct SettingsView: View {
         }
         .background(KoiColors.surface.ignoresSafeArea())
         .onChange(of: fuel.provinceID) { Task { await fuel.refresh() } }
+    }
+
+    private var appearanceSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Eyebrow(text: "Appearance")
+            HStack(spacing: 4) {
+                seg("System", active: theme == "system") { theme = "system" }
+                seg("Light", active: theme == "light") { theme = "light" }
+                seg("Dark", active: theme == "dark") { theme = "dark" }
+            }
+            .padding(4)
+            .background(KoiColors.insetFill, in: Capsule())
+        }
     }
 
     private var fuelTypeSection: some View {

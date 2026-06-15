@@ -95,6 +95,11 @@ final class Garage: ObservableObject {
         save()
     }
 
+    func setActiveCar(_ id: UUID) {
+        activeCarID = id
+        save()
+    }
+
     func updatePlan(_ plan: Plan) {
         guard let i = plans.firstIndex(where: { $0.id == plan.id }) else { return }
         plans[i] = plan

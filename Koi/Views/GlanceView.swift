@@ -108,7 +108,7 @@ struct GlanceView: View {
             }
         }
         .animation(.easeInOut(duration: 0.3), value: garage.isAllClear)
-        .task { await fuel.refresh() }
+        .task { await fuel.refresh(province: garage.activeCar?.fuelRegionID) }
         .sheet(item: $selected) { r in
             ReminderDetailView(reminder: r)
                 .environmentObject(garage)
@@ -136,10 +136,31 @@ struct GlanceView: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel("Settings")
             }
-            HStack(spacing: 8) {
-                Circle().fill(KoiColors.sage).frame(width: 9, height: 9)
-                Text(activeCarLine).koiStyle(.body).foregroundStyle(KoiColors.textSecondary)
+            Menu {
+                ForEach(garage.residents) { c in
+                    Button {
+                        garage.setActiveCar(c.id)
+                        Task { await fuel.refresh(province: c.fuelRegionID) }
+                    } label: {
+                        if c.id == garage.activeCar?.id {
+                            Label(c.displayName, systemImage: "checkmark")
+                        } else {
+                            Text(c.displayName)
+                        }
+                    }
+                }
+            } label: {
+                HStack(spacing: 8) {
+                    Circle().fill(KoiColors.sage).frame(width: 9, height: 9)
+                    Text(activeCarLine).koiStyle(.body).foregroundStyle(KoiColors.textSecondary)
+                    if garage.residents.count > 1 {
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(KoiColors.textSubdued)
+                    }
+                }
             }
+            .disabled(garage.residents.count <= 1)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }

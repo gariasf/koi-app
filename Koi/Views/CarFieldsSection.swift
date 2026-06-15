@@ -11,6 +11,7 @@ struct CarFormData {
     var odometer = ""
     var plate = ""
     var nickname = ""
+    var fuelRegionID: String?
 
     init() {}
 
@@ -21,6 +22,7 @@ struct CarFormData {
         odometer = car.odometerKm.map(String.init) ?? ""
         plate = car.plate ?? ""
         nickname = car.nickname ?? ""
+        fuelRegionID = car.fuelRegionID
     }
 
     var isValid: Bool { !makeModel.trimmingCharacters(in: .whitespaces).isEmpty }
@@ -37,6 +39,7 @@ struct CarFormData {
         car.plate = p.isEmpty ? nil : p
         let n = nickname.trimmingCharacters(in: .whitespaces)
         car.nickname = n.isEmpty ? nil : n
+        car.fuelRegionID = fuelRegionID
         car.photo = photoData
         if let photoData, let image = UIImage(data: photoData) {
             car.accent = CarAccent.derive(from: image)

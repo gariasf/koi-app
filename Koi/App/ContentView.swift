@@ -1,10 +1,10 @@
 import SwiftUI
 
 /// Root router. Empty garage → first run; otherwise → the tabbed app shell.
-/// Carries a small dev-only light/dark toggle (remove once navigation matures).
+/// Theme follows the user's choice in Settings (System / Light / Dark).
 struct ContentView: View {
     @EnvironmentObject private var garage: Garage
-    @State private var schemeOverride: ColorScheme?
+    @AppStorage("koi.theme") private var theme = "system"
 
     var body: some View {
         Group {
@@ -15,35 +15,14 @@ struct ContentView: View {
             }
         }
         .animation(.easeInOut(duration: 0.25), value: garage.isEmpty)
-        .preferredColorScheme(schemeOverride)
-        .overlay(alignment: .topTrailing) { schemeToggle }
+        .preferredColorScheme(preferredScheme)
     }
 
-    private var schemeToggle: some View {
-        Button {
-            switch schemeOverride {
-            case .none:   schemeOverride = .light
-            case .light:  schemeOverride = .dark
-            case .dark:   schemeOverride = nil
-            @unknown default: schemeOverride = nil
-            }
-        } label: {
-            Image(systemName: toggleSymbol)
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(KoiColors.textSubdued)
-                .padding(8)
-        }
-        .padding(.top, 50)
-        .padding(.trailing, 10)
-        .accessibilityLabel("Toggle color scheme (scaffold)")
-    }
-
-    private var toggleSymbol: String {
-        switch schemeOverride {
-        case .none:  return "circle.lefthalf.filled"
-        case .light: return "sun.max"
-        case .dark:  return "moon"
-        @unknown default: return "circle.lefthalf.filled"
+    private var preferredScheme: ColorScheme? {
+        switch theme {
+        case "light": return .light
+        case "dark":  return .dark
+        default:      return nil   // system
         }
     }
 }
@@ -51,9 +30,6 @@ struct ContentView: View {
 #Preview("First run") {
     ContentView().environmentObject(Garage(persists: false)).environmentObject(FuelPriceStore.preview)
 }
-#Preview("App · light") {
-    ContentView().environmentObject(Garage.preview).environmentObject(FuelPriceStore.preview).preferredColorScheme(.light)
-}
-#Preview("App · dark") {
-    ContentView().environmentObject(Garage.preview).environmentObject(FuelPriceStore.preview).preferredColorScheme(.dark)
+#Preview("App") {
+    ContentView().environmentObject(Garage.preview).environmentObject(FuelPriceStore.preview)
 }

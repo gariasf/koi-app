@@ -22,6 +22,7 @@ struct EditCarView: View {
             ScrollView {
                 VStack(spacing: 16) {
                     CarFieldsSection(data: $form)
+                    fuelRegionRow
                     if editsPlan {
                         Eyebrow(text: "Plan")
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -47,6 +48,27 @@ struct EditCarView: View {
                 editsPlan = true
             }
         }
+    }
+
+    @ViewBuilder private var fuelRegionRow: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Fuel region").koiStyle(.eyebrow).foregroundStyle(KoiColors.textSubdued)
+            Menu {
+                Button("Use app default") { form.fuelRegionID = nil }
+                ForEach(Province.all) { p in Button(p.name) { form.fuelRegionID = p.id } }
+            } label: {
+                HStack {
+                    Text(form.fuelRegionID.map(Province.name(for:)) ?? "App default")
+                        .koiStyle(.body).foregroundStyle(KoiColors.textPrimary)
+                    Spacer()
+                    Image(systemName: "chevron.up.chevron.down").font(.system(size: 12)).foregroundStyle(KoiColors.textSubdued)
+                }
+                .padding(.horizontal, 14).padding(.vertical, 12)
+                .background(KoiColors.fieldFill, in: RoundedRectangle(cornerRadius: KoiRadius.field, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: KoiRadius.field, style: .continuous).strokeBorder(KoiColors.border, lineWidth: 1))
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func save() {

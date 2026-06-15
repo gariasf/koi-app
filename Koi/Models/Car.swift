@@ -16,6 +16,7 @@ struct Car: Identifiable, Codable, Hashable {
     var nickname: String?
     var accent: CarAccent = .sage
     var photo: Data?
+    var fuelRegionID: String?    // per-car region override for the fuel feed; nil = app default
     var addedAt: Date = Date()
 
     /// Nickname wins; otherwise make + model; otherwise a gentle fallback.
