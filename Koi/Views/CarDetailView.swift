@@ -10,6 +10,7 @@ struct CarDetailView: View {
     @State private var showSwap = false
     @State private var showVault = false
     @State private var showEdit = false
+    @State private var showAddReminder = false
 
     private var plan: Plan? { garage.plan(for: car) }
     private var canSwap: Bool { plan?.allowsSwap == true }
@@ -38,6 +39,9 @@ struct CarDetailView: View {
         }
         .sheet(isPresented: $showEdit) {
             EditCarView(car: car).environmentObject(garage).presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $showAddReminder) {
+            AddReminderView(car: car).environmentObject(garage).presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showSwap) {
             if let plan {
@@ -118,7 +122,7 @@ struct CarDetailView: View {
     private var actions: some View {
         HStack(spacing: 10) {
             actionTile("Log", "square.and.pencil") { showLog = true }
-            actionTile("Remind", "bell") { }
+            actionTile("Remind", "bell") { showAddReminder = true }
             actionTile("Docs", "folder") { showVault = true }
             if canSwap {
                 actionTile("Swap", "arrow.triangle.2.circlepath") { showSwap = true }
@@ -201,6 +205,9 @@ struct CarDetailView: View {
         for log in garage.fuelLogs(for: car) {
             items.append(TLItem(date: log.date, title: timelineTitle(log), subtitle: timelineSubtitle(log)))
         }
+        for e in garage.entries(for: car) {
+            items.append(TLItem(date: e.date, title: entryTitle(e), subtitle: entrySubtitle(e)))
+        }
         if let plan {
             let lineage = garage.lineage(for: plan)
             if let idx = lineage.firstIndex(of: car), idx > 0 {
@@ -227,6 +234,21 @@ struct CarDetailView: View {
 
     private func timelineSubtitle(_ log: FuelLog) -> String {
         [KoiFormat.shortDate(log.date), log.station].compactMap { $0 }.joined(separator: " · ")
+    }
+
+    private func entryTitle(_ e: LogEntry) -> String {
+        let money = e.amount.map { KoiFormat.money($0) }
+        switch e.kind {
+        case .expense: return "Expense" + (money.map { " " + $0 } ?? "")
+        case .service: return "Service" + (money.map { " " + $0 } ?? "")
+        case .note:    return e.note.isEmpty ? "Note" : e.note
+        }
+    }
+
+    private func entrySubtitle(_ e: LogEntry) -> String {
+        var parts = [KoiFormat.shortDate(e.date)]
+        if e.kind != .note, !e.note.isEmpty { parts.append(e.note) }
+        return parts.joined(separator: " · ")
     }
 }
 

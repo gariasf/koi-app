@@ -11,7 +11,7 @@ struct InsuranceVaultView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ModalHeader(title: "Insurance") { dismiss() }
+            ModalHeader(title: "Insurance", closeTitle: "Done") { dismiss() }
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     insuranceSection

@@ -8,7 +8,7 @@ struct SettingsView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ModalHeader(title: "Settings") { dismiss() }
+            ModalHeader(title: "Settings", closeTitle: "Done") { dismiss() }
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     appearanceSection

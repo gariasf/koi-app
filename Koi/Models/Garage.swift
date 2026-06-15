@@ -9,6 +9,7 @@ final class Garage: ObservableObject {
     @Published private(set) var plans: [Plan] = []
     @Published private(set) var rentals: [Rental] = []
     @Published private(set) var fuelLogs: [FuelLog] = []
+    @Published private(set) var logEntries: [LogEntry] = []
     @Published private(set) var reminders: [Reminder] = []
     @Published private(set) var policies: [InsurancePolicy] = []
     @Published private(set) var documents: [Document] = []
@@ -110,6 +111,20 @@ final class Garage: ObservableObject {
         guard let i = rentals.firstIndex(where: { $0.id == rental.id }) else { return }
         rentals[i].returned = true
         save()
+    }
+
+    func addLogEntry(_ entry: LogEntry) {
+        logEntries.append(entry)
+        if let km = entry.odometerKm,
+           let i = cars.firstIndex(where: { $0.id == entry.carID }),
+           km > (cars[i].odometerKm ?? 0) {
+            cars[i].odometerKm = km
+        }
+        save()
+    }
+
+    func entries(for car: Car) -> [LogEntry] {
+        logEntries.filter { $0.carID == car.id }
     }
 
     func addFuelLog(_ log: FuelLog) {
@@ -287,6 +302,7 @@ final class Garage: ObservableObject {
         var plans: [Plan]
         var rentals: [Rental]
         var fuelLogs: [FuelLog]?
+        var logEntries: [LogEntry]?
         var reminders: [Reminder]?
         var policies: [InsurancePolicy]?
         var documents: [Document]?
@@ -307,6 +323,7 @@ final class Garage: ObservableObject {
         plans = state.plans
         rentals = state.rentals
         fuelLogs = state.fuelLogs ?? []
+        logEntries = state.logEntries ?? []
         reminders = state.reminders ?? []
         policies = state.policies ?? []
         documents = state.documents ?? []
@@ -316,8 +333,8 @@ final class Garage: ObservableObject {
     private func save() {
         guard persists, let url = fileURL else { return }
         let state = State(cars: cars, plans: plans, rentals: rentals, fuelLogs: fuelLogs,
-                          reminders: reminders, policies: policies, documents: documents,
-                          activeCarID: activeCarID)
+                          logEntries: logEntries, reminders: reminders, policies: policies,
+                          documents: documents, activeCarID: activeCarID)
         if let data = try? JSONEncoder().encode(state) {
             try? data.write(to: url, options: .atomic)
         }

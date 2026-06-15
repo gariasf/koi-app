@@ -123,6 +123,7 @@ struct KoiToggleRow: View {
 /// Modal nav row: Cancel (leading) + centered title, hairline underline.
 struct ModalHeader: View {
     let title: String
+    var closeTitle: String = "Cancel"   // "Cancel" for forms, "Done" for read-only detail
     let onCancel: () -> Void
 
     var body: some View {
@@ -130,7 +131,7 @@ struct ModalHeader: View {
             Text(title).koiStyle(.listTitle).foregroundStyle(KoiColors.textPrimary)
             HStack {
                 Button(action: onCancel) {
-                    Text("Cancel").koiStyle(.body).foregroundStyle(KoiColors.textSecondary)
+                    Text(closeTitle).koiStyle(.body).foregroundStyle(KoiColors.textSecondary)
                 }
                 Spacer()
             }
