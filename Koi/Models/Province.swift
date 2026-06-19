@@ -40,4 +40,13 @@ extension Province {
     static func name(for id: String) -> String {
         all.first { $0.id == id }?.name ?? "—"
     }
+
+    /// Best-effort match of a geocoded province name (diacritic/case-insensitive) to a code.
+    static func match(_ name: String) -> Province? {
+        let n = name.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: nil)
+        return all.first { p in
+            let pn = p.name.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: nil)
+            return n == pn || n.contains(pn) || pn.contains(n)
+        }
+    }
 }

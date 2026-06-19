@@ -96,6 +96,7 @@ private extension Urgency {
 struct GlanceView: View {
     @EnvironmentObject private var garage: Garage
     @EnvironmentObject private var fuel: FuelPriceStore
+    @EnvironmentObject private var location: LocationProvider
     @State private var selected: Reminder?
     @State private var showSettings = false
 
@@ -110,6 +111,13 @@ struct GlanceView: View {
         }
         .animation(.easeInOut(duration: 0.3), value: garage.isAllClear)
         .task { await fuel.refresh() }
+        .onChange(of: location.provinceName) { _, name in
+            // a fresh fix tells us the province — let the fuel feed follow the user
+            if let name, let p = Province.match(name), p.id != fuel.provinceID {
+                fuel.setProvince(p.id)
+                Task { await fuel.refresh() }
+            }
+        }
         .sheet(item: $selected) { r in
             ReminderDetailView(reminder: r)
                 .environmentObject(garage)
@@ -118,6 +126,7 @@ struct GlanceView: View {
         .sheet(isPresented: $showSettings) {
             SettingsView().environmentObject(fuel)
                 .presentationDetents([.medium, .large])
+                .presentationBackgroundInteraction(.disabled)
                 .presentationDragIndicator(.visible)
         }
     }
@@ -131,13 +140,7 @@ struct GlanceView: View {
                     Text(dateLine).koiStyle(.meta).foregroundStyle(KoiColors.textSubdued)
                 }
                 Spacer()
-                Button { showSettings = true } label: {
-                    Image(systemName: "gearshape")
-                        .font(.system(size: 18, weight: .regular))
-                        .foregroundStyle(KoiColors.textSubdued)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Settings")
+                KoiIconButton(systemName: "gearshape", accessibilityLabel: "Settings") { showSettings = true }
             }
             Menu {
                 ForEach(garage.residents) { c in
@@ -168,35 +171,56 @@ struct GlanceView: View {
     }
 
     // MARK: Direction A — the calm glance
+    // The whole page scrolls together (header included) so the hero never clips, with the native
+    // bounce; the minHeight keeps the hero centred when everything fits on one screen.
     private var directionA: some View {
-        VStack(spacing: 0) {
-            header
-            Spacer(minLength: 0)
-            VStack(spacing: 24) {
-                hero
-                VStack(spacing: 12) {
-                    if let r = garage.nextHorizon { reminderCardButton(r, eyebrow: "Next up") }
-                    lastFillCard
-                    fuelCard
+        GeometryReader { geo in
+            ScrollView {
+                VStack(spacing: 0) {
+                    header
+                    Spacer(minLength: 0)
+                    VStack(spacing: 24) {
+                        hero
+                        VStack(spacing: 12) {
+                            if let r = garage.nextHorizon { reminderCardButton(r, eyebrow: "Next up") }
+                            lastFillCard
+                            fuelCard
+                        }
+                    }
+                    Spacer(minLength: 0)
                 }
+                .padding(.horizontal, KoiSpace.gutter)
+                .padding(.top, KoiSpace.s2)
+                .padding(.bottom, KoiSpace.s4)
+                .frame(minHeight: geo.size.height)
             }
-            Spacer(minLength: 0)
         }
-        .padding(.horizontal, KoiSpace.gutter)
-        .padding(.top, KoiSpace.s2)
-        .padding(.bottom, KoiSpace.s4)
     }
 
     private var hero: some View {
         VStack(spacing: 14) {
-            RippleMark(size: 44)
+            RippleMark(size: 44, color: heroAccent.text)
             Text("All clear").koiStyle(.allClearHero).foregroundStyle(KoiColors.textPrimary)
-            Text("Nothing due for the next six weeks.")
+            Text(heroSubtitle)
                 .koiStyle(.body).foregroundStyle(KoiColors.textSecondary)
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
-        .background(alignment: .top) { Bloom().offset(y: -24) }
+        .background(alignment: .top) { Bloom(color: heroAccent.tile).offset(y: -24) }
+    }
+
+    // Subtle per-car accent — the hero glow + mark take the active car's hue, so you feel
+    // which car you're looking at without a loud indicator.
+    private var heroAccent: CarAccent { garage.activeCar?.accent ?? .sage }
+
+    // The reassurance line adapts to the car: a plan with a mileage cap leads with the month's
+    // mileage; otherwise the calm default.
+    private var heroSubtitle: String {
+        if let car = garage.activeCar, let plan = garage.plan(for: car), plan.kind != .owned,
+           let cap = plan.mileageCapPerMonth, cap > 0, let used = garage.kmThisCycle(for: car) {
+            return "\(used.formatted()) of \(cap.formatted()) km this \(plan.capPeriod.noun)."
+        }
+        return "Nothing due in the next few weeks."
     }
 
     // MARK: Direction B — what's coming
@@ -231,17 +255,31 @@ struct GlanceView: View {
     }
 
     private var comingUpLine: String {
-        let car = garage.comingUpHeadlineCar?.displayName ?? "your garage"
-        return "A few things coming up — mostly \(car)."
+        let items = garage.comingUp
+        let name = garage.comingUpHeadlineCar?.displayName ?? "your car"
+        if items.count == 1 { return "One thing coming up for \(name)." }
+        let cars = Set(items.map { $0.carID })
+        if cars.count <= 1 {
+            return items.count == 2
+                ? "A couple of things coming up for \(name)."
+                : "A few things coming up for \(name)."
+        }
+        // multiple cars — only say "mostly" when one car holds a strict majority
+        let topID = garage.comingUpHeadlineCar?.id
+        let topCount = items.filter { $0.carID == topID }.count
+        return topCount * 2 > items.count
+            ? "A few things coming up, mostly \(name)."
+            : "A few things coming up across your cars."
     }
 
     private func featuredCard(_ r: Reminder) -> some View {
         Button { selected = r } label: {
             VStack(alignment: .leading, spacing: 14) {
+                Eyebrow(text: "Next up")
                 HStack(spacing: 12) {
                     IconTile(systemName: r.kind.icon, tint: garage.urgency(r).tile)
                     VStack(alignment: .leading, spacing: 3) {
-                        Text("Next up · \(r.title)").koiStyle(.listTitle).foregroundStyle(KoiColors.textPrimary).lineLimit(1)
+                        Text(r.title).koiStyle(.listTitle).foregroundStyle(KoiColors.textPrimary).lineLimit(1)
                         Text(r.detail).koiStyle(.meta).foregroundStyle(KoiColors.textSecondary).lineLimit(1)
                     }
                     Spacer(minLength: 8)
@@ -285,33 +323,49 @@ struct GlanceView: View {
     }
 
     @ViewBuilder private var lastFillCard: some View {
-        if garage.activeCar?.fuel != .electric {
+        if garage.activeCar?.fuel.nearbyProduct != nil {   // petrol/diesel only — matches the nearby card
             if let car = garage.activeCar, let log = garage.latestFuelLog(for: car) {
-                GlanceCard(eyebrow: "Last fill-up", icon: "drop.fill", tint: .sage,
-                           title: lastFillTitle(log), titleMono: true, subtitle: lastFillSubtitle(log))
+                GlanceCard(eyebrow: "Last fill-up", icon: "gauge.medium", tint: .sage,
+                           title: KoiFormat.money(log.amount, code: log.currency), titleMono: true,
+                           subtitle: lastFillSubtitle(log),
+                           trailing: lastFillPerLiter(log))
             } else {
-                GlanceCard(eyebrow: "Last fill-up", icon: "drop.fill", tint: .sage,
-                           title: "No fill-ups yet", subtitle: "Tap ＋ to log your first")
+                GlanceCard(eyebrow: "Last fill-up", icon: "gauge.medium", tint: .sage,
+                           title: "No fill-ups yet", subtitle: "Log your first one to see it here")
             }
         }
     }
 
-    // Live local fuel price for the active car's fuel (minetur feed). Tap → Maps directions
-    // to the station. Hidden for electric / gas (no petrol-diesel price).
+    // Local fuel price for the active car's fuel (minetur feed). Hidden for electric / gas.
+    // Undecided → ask for location; located → the closest station (tap = directions);
+    // denied / no fix → region price as info only (no directions).
     @ViewBuilder private var fuelCard: some View {
         if let product = garage.activeCar?.fuel.nearbyProduct {
-            if let s = fuel.cheapest(product: product), let price = product.price(s) {
-                Button { openDirections(to: s) } label: {
-                    GlanceCard(eyebrow: product.nearbyEyebrow, icon: "mappin", tint: .sage,
-                               title: KoiFormat.pricePerLiter(price), titleMono: true,
-                               subtitle: "\(s.brand) · \(s.municipality)",
-                               trailingMeta: fuel.freshnessText.isEmpty ? nil : fuel.freshnessText)
+            if location.status == .notDetermined {
+                Button { location.requestOrRefresh() } label: {
+                    GlanceCard(eyebrow: product.nearbyEyebrow, icon: "fuelpump.fill", tint: .sage,
+                               title: "Find fuel near you", subtitle: "Tap to use your location, only while open")
                 }
                 .buttonStyle(.plain)
+            } else if location.isAuthorized, let coord = location.coordinate,
+                      let near = fuel.closest(to: coord, product: product), let price = product.price(near.station) {
+                Button { openDirections(to: near.station) } label: {
+                    GlanceCard(eyebrow: product.nearbyEyebrow, icon: "fuelpump.fill", tint: .sage,
+                               title: KoiFormat.pricePerLiter(price), titleMono: true,
+                               subtitle: "\(near.station.brand) · \(near.station.municipality)",
+                               trailingMeta: KoiFormat.distance(near.distanceKm))
+                }
+                .buttonStyle(.plain)
+            } else if let s = fuel.cheapest(product: product), let price = product.price(s) {
+                // fallback — region price as information only, no directions to a specific station
+                GlanceCard(eyebrow: product.nearbyEyebrow, icon: "fuelpump.fill", tint: .sage,
+                           title: KoiFormat.pricePerLiter(price), titleMono: true,
+                           subtitle: "Cheapest in \(fuel.provinceName)",
+                           trailingMeta: fuel.freshnessText.isEmpty ? nil : fuel.freshnessText)
             } else {
                 Button { showSettings = true } label: {
-                    GlanceCard(eyebrow: product.nearbyEyebrow, icon: "mappin", tint: .sage,
-                               title: "No prices yet", subtitle: "Check your region in Settings")
+                    GlanceCard(eyebrow: product.nearbyEyebrow, icon: "fuelpump.fill", tint: .sage,
+                               title: "No prices yet", subtitle: "Set your region in Settings for local prices")
                 }
                 .buttonStyle(.plain)
             }
@@ -319,7 +373,9 @@ struct GlanceView: View {
     }
 
     private func openDirections(to s: FuelStation) {
-        guard let lat = s.latitude, let lon = s.longitude else { showSettings = true; return }
+        // validate coordinates fall within Europe before trusting them in a Maps URL
+        guard let lat = s.latitude, let lon = s.longitude,
+              (34.0...72.0).contains(lat), (-25.0...45.0).contains(lon) else { showSettings = true; return }
         let dest = "\(lat),\(lon)"
         if let google = URL(string: "comgooglemaps://?daddr=\(dest)&directionsmode=driving"),
            UIApplication.shared.canOpenURL(google) {
@@ -329,13 +385,15 @@ struct GlanceView: View {
         }
     }
 
-    private func lastFillTitle(_ log: FuelLog) -> String {
-        let money = KoiFormat.money(log.amount, code: log.currency)
-        if let e = garage.efficiencyL100(for: log) { return "\(money) · \(KoiFormat.efficiency(e))" }
-        return money
+    private func lastFillPerLiter(_ log: FuelLog) -> String? {
+        guard log.liters > 0 else { return nil }
+        return KoiFormat.pricePerLiter((log.amount as NSDecimalNumber).doubleValue / log.liters)
     }
     private func lastFillSubtitle(_ log: FuelLog) -> String {
-        [KoiFormat.shortDate(log.date), log.station].compactMap { $0 }.joined(separator: " · ")
+        var parts: [String] = []
+        if let e = garage.efficiencyL100(for: log) { parts.append(KoiFormat.efficiency(e)) }
+        parts.append(KoiFormat.shortDate(log.date))
+        return parts.joined(separator: " · ")
     }
 
     // MARK: derived copy

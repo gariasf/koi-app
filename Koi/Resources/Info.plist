@@ -22,6 +22,8 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>UILaunchScreen</key>
 	<dict/>
 	<key>UISupportedInterfaceOrientations</key>
@@ -43,19 +45,21 @@
 	<array>
 		<string>comgooglemaps</string>
 	</array>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Koi uses your location only while the app is open, to show the cheapest fuel near you. It's never stored or shared.</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
-		<!-- Scoped exception: the minetur gov fuel feed uses a legacy TLS config that ATS rejects by default. -->
+		<!-- Scoped exception: the minetur gov fuel feed negotiates TLS 1.2 but without an
+		     ATS-approved forward-secrecy cipher, so only that one requirement is relaxed.
+		     HTTPS only (no cleartext); the request is https. A proxy will remove this entirely. -->
 		<key>NSExceptionDomains</key>
 		<dict>
 			<key>sedeaplicaciones.minetur.gob.es</key>
 			<dict>
 				<key>NSExceptionMinimumTLSVersion</key>
-				<string>TLSv1.0</string>
+				<string>TLSv1.2</string>
 				<key>NSExceptionRequiresForwardSecrecy</key>
 				<false/>
-				<key>NSExceptionAllowsInsecureHTTPLoads</key>
-				<true/>
 			</dict>
 		</dict>
 	</dict>

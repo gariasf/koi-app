@@ -1,13 +1,18 @@
 import SwiftUI
 
 /// Quick-add. Fuel keeps the fast keypad; Expense / Service / Note are short forms.
+/// The header makes the target car the subject (accent dot + name) and — when there's more
+/// than one resident — lets you switch car right here, so a quick log never lands on the wrong one.
 struct LogSheetView: View {
     @EnvironmentObject private var garage: Garage
+    @EnvironmentObject private var fuel: FuelPriceStore
     @Environment(\.dismiss) private var dismiss
-    let car: Car
+    @State private var car: Car
+
+    init(car: Car) { _car = State(initialValue: car) }
 
     enum LogType: String, CaseIterable { case fuel = "Fuel", expense = "Expense", service = "Service", note = "Note" }
-    enum Field { case amount, odometer, liters }
+    enum Field { case amount, perLiter, liters, odometer }
 
     @State private var type: LogType = {
         let a = ProcessInfo.processInfo.arguments   // dev: `-logtype expense`
@@ -15,15 +20,19 @@ struct LogSheetView: View {
            let t = LogType(rawValue: a[i + 1].capitalized) { return t }
         return .fuel
     }()
-    @State private var amount = ""
+    @State private var amount = ""        // fuel: the total €; expense/service: the amount
+    @State private var perLiter = ""      // fuel: €/L
     @State private var odometer = ""
     @State private var liters = ""
     @State private var note = ""
     @State private var focus: Field = .amount
+    /// Which of the three coupled fuel fields the user has actually typed, oldest→newest.
+    /// The one NOT among the last two is the derived (auto-computed) field.
+    @State private var entered: [Field] = []
 
     var body: some View {
         VStack(spacing: 0) {
-            ModalHeader(title: "Log · \(car.displayName)")
+            logHeader
             typePicker
                 .padding(.horizontal, KoiSpace.gutter)
                 .padding(.top, 14)
@@ -36,49 +45,167 @@ struct LogSheetView: View {
                 .padding(.bottom, 12)
         }
         .background(KoiColors.sheet.ignoresSafeArea())
+        .onAppear {
+            // dev: `-fuelseed` prefills Liters + €/L so the derived Total can be screenshotted
+            if ProcessInfo.processInfo.arguments.contains("-fuelseed"), type == .fuel {
+                amount = "67.45"; perLiter = "1.429"; entered = [.amount, .perLiter]; focus = .odometer
+            }
+        }
+    }
+
+    // MARK: header — the car is the subject; tap to switch when there's more than one
+    private var logHeader: some View {
+        VStack(spacing: 0) {
+            Group {
+                if garage.residents.count > 1 {
+                    Menu {
+                        ForEach(garage.residents) { c in
+                            Button { switchCar(c) } label: {
+                                Label(c.displayName, systemImage: c.id == car.id ? "checkmark" : "car")
+                            }
+                        }
+                    } label: { carHeaderLabel(switchable: true) }
+                } else {
+                    carHeaderLabel(switchable: false)
+                }
+            }
+            .padding(.vertical, 6)   // the tappable car control's own touch target
+        }
+        .frame(maxWidth: .infinity)
+        // Top gap is on the container, NOT the button — so it's dead space below the system
+        // grab handle and can't steal the tap (which was dismissing the sheet).
+        .padding(.top, 26)
+        .padding(.bottom, 12)
+        .padding(.horizontal, KoiSpace.gutter)
+        .overlay(alignment: .bottom) { Rectangle().fill(KoiColors.hairline).frame(height: 1) }
+    }
+
+    private func carHeaderLabel(switchable: Bool) -> some View {
+        HStack(spacing: 8) {
+            Circle().fill(car.accent.text).frame(width: 9, height: 9)
+            Text(car.displayName).koiStyle(.listTitle).foregroundStyle(KoiColors.textPrimary)
+            if switchable {
+                Image(systemName: "chevron.down").font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(KoiColors.textSubdued)
+            }
+        }
+    }
+
+    private func switchCar(_ c: Car) {
+        guard c.id != car.id else { return }
+        Haptics.tap()
+        car = c
     }
 
     // MARK: type picker
     private var typePicker: some View {
-        HStack(spacing: 4) {
+        Picker("Type", selection: $type) {
             ForEach(LogType.allCases, id: \.self) { t in
-                Button { type = t } label: {
-                    Text(t.rawValue).koiStyle(.meta)
-                        .foregroundStyle(type == t ? .white : KoiColors.textSecondary)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 8)
-                        .background { if type == t { Capsule().fill(KoiColors.sage) } }
-                }
-                .buttonStyle(.plain)
+                Text(t.rawValue).tag(t)
             }
         }
-        .padding(4)
-        .background(KoiColors.insetFill, in: Capsule())
+        .pickerStyle(.segmented)
     }
 
     // MARK: Fuel (keypad)
+    // Liters · €/L · Total are one triangle — enter any two and the third computes. The big
+    // number is always the Total (what people remember a fill by); €/L and Liters live as chips
+    // below, alongside the optional odometer (which drives the derived efficiency). The focused
+    // field shows a pill + a blinking caret so you always know where you're typing.
     private var fuelBody: some View {
         VStack(spacing: 0) {
-            Spacer(minLength: 16)
-            Text("€" + (amount.isEmpty ? "0" : amount))
-                .font(KoiFont.mono(46, .medium))
-                .foregroundStyle(amount.isEmpty ? KoiColors.textSubdued : KoiColors.textPrimary)
-                .onTapGesture { focus = .amount }
-            HStack(spacing: 14) {
-                detailChip(.odometer, value: odometer.isEmpty ? "— km" : "\(odometer) km")
-                Text("·").koiStyle(.body).foregroundStyle(KoiColors.textSubdued)
-                detailChip(.liters, value: liters.isEmpty ? "— L" : "\(liters) L")
+            Spacer(minLength: 12)
+            Button { focusField(.amount) } label: {
+                HStack(alignment: .center, spacing: 4) {
+                    Text("€" + heroTotalString)
+                        .font(KoiFont.mono(46, .medium))
+                        .foregroundStyle(heroDimmed ? KoiColors.textSubdued : KoiColors.textPrimary)
+                    if focus == .amount { Caret(big: true) }
+                }
             }
-            .padding(.top, 10)
-            Spacer(minLength: 16)
+            .buttonStyle(.plain)
+
+            HStack(spacing: 8) {
+                chip(.perLiter)
+                chip(.liters)
+                chip(.odometer)
+            }
+            .padding(.top, 12)
+
+            if derivedField == nil {
+                Text("Enter any two and Koi works out the third.")
+                    .koiStyle(.meta).foregroundStyle(KoiColors.textFaint)
+                    .padding(.top, 8)
+            }
+
+            if hasQuickActions { quickActions.padding(.top, 14) }
+
+            if overTank {
+                Text("More than the tank holds (\(litersLabel(car.tankCapacityL ?? 0)))")
+                    .koiStyle(.meta).foregroundStyle(KoiColors.red)
+                    .padding(.top, 8)
+            }
+
+            Spacer(minLength: 12)
             keypad.padding(.horizontal, KoiSpace.gutter)
         }
     }
 
-    private func detailChip(_ field: Field, value: String) -> some View {
-        Button { focus = field } label: {
-            Text(value).koiStyle(.monoMd)
-                .foregroundStyle(focus == field ? KoiColors.sageText : KoiColors.textSecondary)
+    /// One coupled fuel value. Focused → pill + caret. Auto-computed → a sage "=" + tint so the
+    /// live calculation is unmistakable. Otherwise plain.
+    private func chip(_ field: Field) -> some View {
+        let parts = chipParts(field)
+        let focused = field == focus
+        let isAuto = !focused && field == derivedField && !parts.number.isEmpty
+        return Button { focusField(field) } label: {
+            HStack(spacing: 3) {
+                if isAuto { Text("=").koiStyle(.monoMd).foregroundStyle(KoiColors.sageText) }
+                if !parts.number.isEmpty {
+                    Text(parts.number).koiStyle(.monoMd).foregroundStyle(chipColor(field))
+                }
+                if focused { Caret() }
+                Text(parts.unit).koiStyle(.monoMd).foregroundStyle(chipColor(field))
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .background {
+                if focused {
+                    Capsule().fill(KoiColors.insetFill)
+                        .overlay(Capsule().strokeBorder(KoiColors.sage.opacity(0.55), lineWidth: 1))
+                } else if isAuto {
+                    Capsule().fill(KoiColors.sageTint)
+                }
+            }
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// Contextual one-taps: accept today's pump price, or fill the tank to its known size.
+    private var hasQuickActions: Bool { marketPrice != nil || (car.tankCapacityL ?? 0) > 0 }
+
+    @ViewBuilder private var quickActions: some View {
+        HStack(spacing: 10) {
+            if let mp = marketPrice {
+                quickPill("Today €\(pricePerLiterString(mp))", icon: "fuelpump") { applyMarketPrice(mp) }
+            }
+            if let tank = car.tankCapacityL, tank > 0 {
+                quickPill("Fill to full · \(litersLabel(tank))", icon: "drop.fill") { fillToFull(tank) }
+            }
+        }
+    }
+
+    private func quickPill(_ title: String, icon: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: icon).font(.system(size: 12, weight: .semibold))
+                Text(title).koiStyle(.meta)
+            }
+            .foregroundStyle(KoiColors.sageText)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(KoiColors.container, in: Capsule())
+            .overlay(Capsule().strokeBorder(KoiColors.ring, lineWidth: 1))
         }
         .buttonStyle(.plain)
     }
@@ -119,16 +246,91 @@ struct LogSheetView: View {
     }
 
     private var noteField: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(type == .note ? "Note" : "What for? (optional)")
-                .koiStyle(.eyebrow).foregroundStyle(KoiColors.textSubdued)
-            TextField(type == .note ? "Add a note…" : "e.g. Car wash", text: $note, axis: .vertical)
-                .koiStyle(.body).foregroundStyle(KoiColors.textPrimary)
-                .lineLimit(type == .note ? 3...6 : 1...2)
-                .padding(.horizontal, 12).padding(.vertical, 11)
-                .background(KoiColors.fieldFill, in: RoundedRectangle(cornerRadius: KoiRadius.field, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: KoiRadius.field, style: .continuous).strokeBorder(KoiColors.border, lineWidth: 1))
+        KoiField(label: type == .note ? "Note" : "What for? (optional)",
+                 placeholder: type == .note ? "Add a note…" : "e.g. Car wash",
+                 text: $note,
+                 axis: .vertical,
+                 lineLimit: type == .note ? 3...6 : 1...2)
+    }
+
+    // MARK: the fuel triangle — Total · €/L · Liters, any two derive the third
+    private let triangle: [Field] = [.amount, .perLiter, .liters]
+
+    /// The field to auto-compute: the one not among the last two the user touched (nil until two are set).
+    private var derivedField: Field? {
+        let typed = entered.filter { triangle.contains($0) }
+        guard typed.count >= 2 else { return nil }
+        let lastTwo = Array(typed.suffix(2))
+        return triangle.first { !lastTwo.contains($0) }
+    }
+
+    private func num(_ s: String) -> Double { KoiFormat.double(s) ?? 0 }
+
+    /// All three values with the derived one filled in.
+    private var resolved: (total: Double, perLiter: Double, liters: Double) {
+        var t = num(amount), p = num(perLiter), l = num(liters)
+        switch derivedField {
+        case .amount:   t = l * p
+        case .perLiter: p = l > 0 ? t / l : 0
+        case .liters:   l = p > 0 ? t / p : 0
+        default: break
         }
+        return (t, p, l)
+    }
+
+    private var marketProduct: FuelProduct? { car.fuel.nearbyProduct }
+    private var marketPrice: Double? {
+        guard let p = marketProduct else { return nil }
+        return fuel.cheapest(product: p).flatMap { p.price($0) }
+    }
+
+    private var overTank: Bool {
+        guard let tank = car.tankCapacityL, tank > 0 else { return false }
+        return resolved.liters > tank * 1.02   // small tolerance for top-offs / rounding
+    }
+
+    // MARK: display
+    private var heroTotalString: String {
+        if focus == .amount, !amount.isEmpty { return amount }     // actively typing the total
+        if derivedField == .amount { let t = resolved.total; return t > 0 ? String(format: "%.2f", t) : "0" }
+        return amount.isEmpty ? "0" : amount
+    }
+    private var heroDimmed: Bool { heroTotalString == "0" }
+
+    /// (number, unit) for a chip. Focused shows the raw value (may be empty → just caret + unit);
+    /// the auto field shows its computed value; otherwise the typed value or an em-dash.
+    private func chipParts(_ field: Field) -> (number: String, unit: String) {
+        switch field {
+        case .perLiter:
+            let u = "€/L"
+            if field != focus, field == derivedField, resolved.perLiter > 0 { return (pricePerLiterString(resolved.perLiter), u) }
+            if field == focus { return (perLiter, u) }
+            return (perLiter.isEmpty ? "—" : perLiter, u)
+        case .liters:
+            let u = "L"
+            if field != focus, field == derivedField, resolved.liters > 0 { return (litersValue(resolved.liters), u) }
+            if field == focus { return (liters, u) }
+            return (liters.isEmpty ? "—" : liters, u)
+        case .odometer:
+            let u = "km"
+            if field == focus { return (odometer.isEmpty ? "" : grouped(odometer), u) }
+            return (odometer.isEmpty ? "—" : grouped(odometer), u)
+        default:
+            return ("", "")
+        }
+    }
+
+    private func chipColor(_ field: Field) -> Color {
+        if field == focus { return KoiColors.sageText }
+        if field == derivedField { return KoiColors.textSecondary }   // auto-computed (paired with "=" + tint)
+        let empty: Bool
+        switch field {
+        case .perLiter: empty = perLiter.isEmpty
+        case .liters:   empty = liters.isEmpty
+        case .odometer: empty = odometer.isEmpty
+        default:        empty = true
+        }
+        return empty ? KoiColors.textSubdued : KoiColors.textSecondary
     }
 
     // MARK: logic
@@ -143,19 +345,55 @@ struct LogSheetView: View {
 
     private var canSave: Bool {
         switch type {
-        case .fuel:    return (Decimal(string: amount) ?? 0) > 0 && (Double(liters) ?? 0) > 0 && (Int(odometer) ?? 0) > 0
-        case .expense: return (Decimal(string: amount) ?? 0) > 0
-        case .service: return (Decimal(string: amount) ?? 0) > 0 || !note.trimmingCharacters(in: .whitespaces).isEmpty
+        case .fuel:    let r = resolved; return r.total > 0 || r.liters > 0
+        case .expense: return (KoiFormat.decimal(amount) ?? 0) > 0
+        case .service: return (KoiFormat.decimal(amount) ?? 0) > 0 || !note.trimmingCharacters(in: .whitespaces).isEmpty
         case .note:    return !note.trimmingCharacters(in: .whitespaces).isEmpty
         }
+    }
+
+    /// Focus a field; if it's the auto-computed one, commit its value first so editing continues from it.
+    private func focusField(_ field: Field) {
+        if triangle.contains(field), field == derivedField {
+            let r = resolved
+            switch field {
+            case .amount:   if r.total > 0 { amount = String(format: "%.2f", r.total); touch(.amount, amount) }
+            case .perLiter: if r.perLiter > 0 { perLiter = pricePerLiterString(r.perLiter); touch(.perLiter, perLiter) }
+            case .liters:   if r.liters > 0 { liters = litersValue(r.liters); touch(.liters, liters) }
+            default: break
+            }
+        }
+        focus = field
+    }
+
+    private func applyMarketPrice(_ mp: Double) {
+        Haptics.tap()
+        perLiter = pricePerLiterString(mp)
+        touch(.perLiter, perLiter)
+        focus = liters.isEmpty ? .liters : .amount
+    }
+
+    private func fillToFull(_ tank: Double) {
+        Haptics.tap()
+        liters = litersValue(tank)
+        touch(.liters, liters)
+        focus = perLiter.isEmpty ? .perLiter : .amount
+    }
+
+    /// Record (or clear) a triangle field in the edit order — newest goes last.
+    private func touch(_ field: Field, _ value: String) {
+        guard triangle.contains(field) else { return }
+        entered.removeAll { $0 == field }
+        if !value.isEmpty { entered.append(field) }
     }
 
     private func tap(_ key: String) {
         Haptics.tap()
         switch focus {
-        case .amount:   amount = edit(amount, key, decimal: true)
+        case .amount:   amount = edit(amount, key, decimal: true);   touch(.amount, amount)
+        case .perLiter: perLiter = edit(perLiter, key, decimal: true); touch(.perLiter, perLiter)
+        case .liters:   liters = edit(liters, key, decimal: true);   touch(.liters, liters)
         case .odometer: odometer = edit(odometer, key, decimal: false)
-        case .liters:   liters = edit(liters, key, decimal: true)
         }
     }
 
@@ -171,23 +409,52 @@ struct LogSheetView: View {
     private func save() {
         switch type {
         case .fuel:
+            let r = resolved
+            let total = derivedField == .amount
+                ? (KoiFormat.decimal(String(format: "%.2f", r.total)) ?? 0)
+                : (KoiFormat.decimal(amount) ?? Decimal(r.total))
             garage.addFuelLog(FuelLog(carID: car.id,
-                                      amount: Decimal(string: amount) ?? 0,
-                                      liters: Double(liters) ?? 0,
-                                      odometerKm: Int(odometer) ?? 0,
+                                      amount: total,
+                                      liters: r.liters,
+                                      odometerKm: Int(odometer.filter(\.isNumber)),
                                       station: nil))
         case .expense, .service, .note:
             let kind: LogKind = type == .expense ? .expense : (type == .service ? .service : .note)
             garage.addLogEntry(LogEntry(carID: car.id, kind: kind,
-                                        amount: Decimal(string: amount.filter { $0.isNumber || $0 == "." }),
+                                        amount: KoiFormat.decimal(amount),
                                         note: note.trimmingCharacters(in: .whitespaces),
                                         odometerKm: Int(odometer.filter(\.isNumber))))
         }
         Haptics.success()
         dismiss()
     }
+
+    // MARK: number formatting
+    private func pricePerLiterString(_ p: Double) -> String { String(format: "%.3f", p) }
+    private func litersValue(_ l: Double) -> String { l == l.rounded() ? String(Int(l)) : String(format: "%.1f", l) }
+    private func litersLabel(_ l: Double) -> String { litersValue(l) + " L" }
+    private func grouped(_ s: String) -> String {
+        guard let n = Int(s.filter(\.isNumber)) else { return s }
+        return n.formatted(.number.grouping(.automatic))
+    }
+}
+
+/// Blinking text caret — the "you're typing here" signal on the focused fuel field.
+private struct Caret: View {
+    var big = false
+    @State private var visible = true
+    var body: some View {
+        RoundedRectangle(cornerRadius: 1, style: .continuous)
+            .fill(KoiColors.sage)
+            .frame(width: big ? 3 : 2, height: big ? 38 : 17)
+            .opacity(visible ? 1 : 0)
+            .animation(.easeInOut(duration: 0.55).repeatForever(autoreverses: true), value: visible)
+            .onAppear { visible = false }
+    }
 }
 
 #Preview {
-    LogSheetView(car: Garage.preview.residents.first!).environmentObject(Garage.preview)
+    LogSheetView(car: Garage.preview.residents.first!)
+        .environmentObject(Garage.preview)
+        .environmentObject(FuelPriceStore.preview)
 }

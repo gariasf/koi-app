@@ -1,13 +1,15 @@
 import SwiftUI
+import UIKit
 
 /// A car's documents vault — the Docs destination. Insurance adapts to the relationship:
-/// owned/lease/finance → a Wallet-style policy card + renewal; subscription → "Included";
-/// (rentals capture excess/CDW on the rental itself, not here.)
+/// owned/lease/finance → a Wallet-style policy card + renewal; subscription → "Included".
 struct InsuranceVaultView: View {
     @EnvironmentObject private var garage: Garage
     @Environment(\.dismiss) private var dismiss
     let car: Car
     @State private var showAddPolicy = false
+    @State private var showAddDoc = false
+    @State private var previewDoc: Document?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -25,6 +27,12 @@ struct InsuranceVaultView: View {
         .background(KoiColors.surface.ignoresSafeArea())
         .sheet(isPresented: $showAddPolicy) {
             AddPolicyView(car: car).environmentObject(garage).presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $showAddDoc) {
+            AddDocumentView(car: car).environmentObject(garage).presentationDragIndicator(.visible)
+        }
+        .sheet(item: $previewDoc) { d in
+            DocumentPreviewView(document: d).presentationDragIndicator(.visible)
         }
     }
 
@@ -51,14 +59,14 @@ struct InsuranceVaultView: View {
         .koiCard()
     }
     private var includedSubtitle: String {
-        if let p = garage.plan(for: car)?.provider, !p.isEmpty { return "No separate policy — \(p) covers it" }
+        if let p = garage.plan(for: car)?.provider, !p.isEmpty { return "No separate policy. \(p) covers it" }
         return "No separate policy to add"
     }
 
     private var addPolicyPrompt: some View {
         Button { showAddPolicy = true } label: {
             HStack(spacing: 12) {
-                IconTile(systemName: "umbrella", tint: .sage)
+                IconTile(systemName: "shield.lefthalf.filled", tint: .sage)
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Add a policy").koiStyle(.listTitle).foregroundStyle(KoiColors.textPrimary)
                     Text("Keep the card, track the renewal").koiStyle(.meta).foregroundStyle(KoiColors.textSecondary)
@@ -79,10 +87,7 @@ struct InsuranceVaultView: View {
                 .koiStyle(.meta)
                 .foregroundStyle(soon ? KoiColors.ochreText : KoiColors.textSecondary)
             Spacer()
-            Button { garage.renew(policy); Haptics.success() } label: {
-                Text("Renew").koiStyle(.body).foregroundStyle(KoiColors.sageText)
-            }
-            .buttonStyle(.plain)
+            KoiTextButton(title: "Renew") { garage.renew(policy); Haptics.success() }
         }
         .padding(.horizontal, 4)
     }
@@ -92,7 +97,7 @@ struct InsuranceVaultView: View {
             Eyebrow(text: "Also in the vault")
             let docs = garage.carDocuments(for: car).filter { $0.kind != .insurance }
             if docs.isEmpty {
-                Text("Nothing else here yet.").koiStyle(.meta).foregroundStyle(KoiColors.textSubdued)
+                EmptyHint(icon: "folder", text: "No documents yet. Keep registration, inspection, anything worth a tap.")
             } else {
                 VStack(spacing: 0) {
                     ForEach(Array(docs.enumerated()), id: \.element.id) { idx, d in
@@ -101,32 +106,43 @@ struct InsuranceVaultView: View {
                 }
                 .koiCard(padding: 0)
             }
-            // TODO: native document picker / scan (P9).
-            Button { } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "plus").font(.system(size: 13, weight: .medium))
-                    Text("Add document").koiStyle(.body)
-                }
-                .foregroundStyle(KoiColors.sageText)
-            }
-            .buttonStyle(.plain)
-            .padding(.top, 2)
+            KoiTextButton(title: "Add document", systemIcon: "plus") { showAddDoc = true }
+                .padding(.top, 2)
         }
     }
 
     private func docRow(_ d: Document, last: Bool) -> some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 12) {
-                IconTile(systemName: d.kind.icon, tint: .neutral)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(d.title).koiStyle(.listTitle).foregroundStyle(KoiColors.textPrimary)
-                    if let s = d.subtitle { Text(s).koiStyle(.meta).foregroundStyle(KoiColors.textSubdued) }
+        Button { if d.hasFile { previewDoc = d } } label: {
+            VStack(spacing: 0) {
+                HStack(spacing: 12) {
+                    docThumb(d)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(d.title).koiStyle(.listTitle).foregroundStyle(KoiColors.textPrimary)
+                        if let s = d.subtitle { Text(s).koiStyle(.meta).foregroundStyle(KoiColors.textSubdued) }
+                    }
+                    Spacer(minLength: 8)
+                    if d.hasFile {
+                        Image(systemName: "chevron.right").font(.system(size: 14, weight: .medium)).foregroundStyle(KoiColors.textSubdued)
+                    }
                 }
-                Spacer(minLength: 8)
-                Image(systemName: "chevron.right").font(.system(size: 14, weight: .medium)).foregroundStyle(KoiColors.textSubdued)
+                .padding(14)
+                if !last { Rectangle().fill(KoiColors.hairline).frame(height: 1).padding(.leading, 14) }
             }
-            .padding(14)
-            if !last { Rectangle().fill(KoiColors.hairline).frame(height: 1).padding(.leading, 14) }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!d.hasFile)
+    }
+
+    @ViewBuilder private func docThumb(_ d: Document) -> some View {
+        if let data = d.imageData, let ui = UIImage(data: data) {
+            Image(uiImage: ui).resizable().scaledToFill()
+                .frame(width: 42, height: 42)
+                .clipShape(RoundedRectangle(cornerRadius: KoiRadius.tile, style: .continuous))
+        } else if d.isPDF {
+            IconTile(systemName: "doc.richtext", tint: .sage)
+        } else {
+            IconTile(systemName: d.kind.icon, tint: .neutral)
         }
     }
 
@@ -140,7 +156,11 @@ struct InsuranceVaultView: View {
         let date = to.formatted(.dateTime.day().month(.abbreviated))
         let days = daysUntil(to)
         if days < 0 { return "Renewal overdue · \(date)" }
-        return "Renews in \(days) days · \(date)"
+        if days == 0 { return "Renews today · \(date)" }
+        if days == 1 { return "Renews tomorrow · \(date)" }
+        if days <= 21 { return "Renews in \(days) days · \(date)" }
+        if days <= 90 { return "Renews in \(days / 7) weeks · \(date)" }
+        return "Renews · \(to.formatted(.dateTime.day().month(.abbreviated).year()))"
     }
 
     private func daysUntil(_ date: Date) -> Int {
@@ -180,7 +200,7 @@ struct InsuranceCard: View {
                 VStack(spacing: 6) {
                     Image(systemName: "barcode").resizable().scaledToFit().frame(height: 36)
                         .foregroundStyle(KoiColors.textPrimary)
-                    Text("Roadside proof").koiStyle(.meta).foregroundStyle(KoiColors.textSubdued)
+                    Text("Proof of insurance").koiStyle(.meta).foregroundStyle(KoiColors.textSubdued)
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.top, 4)
@@ -201,7 +221,7 @@ struct InsuranceCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
     private var premiumText: String {
-        policy.premium.map { KoiFormat.money($0, code: policy.currency) + " / yr" } ?? "—"
+        policy.premium.map { KoiFormat.money($0, code: policy.currency) + "/yr" } ?? "—"
     }
     private var validText: String {
         policy.validTo?.formatted(.dateTime.day().month(.abbreviated).year()) ?? "—"

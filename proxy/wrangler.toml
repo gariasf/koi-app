@@ -1,0 +1,9 @@
+name = "koi-fuel-proxy"
+main = "src/worker.js"
+compatibility_date = "2024-11-01"
+
+# Deploy:      npx wrangler deploy        (prompts a Cloudflare login the first time)
+# Run locally: npx wrangler dev           (serves http://localhost:8787/province/28)
+#
+# After deploy you get a URL like:  https://koi-fuel-proxy.<your-subdomain>.workers.dev
+# Point the app at it (see proxy/README.md), then delete the ATS exception from Info.plist.

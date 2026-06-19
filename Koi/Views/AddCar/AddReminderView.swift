@@ -62,7 +62,7 @@ struct AddReminderView: View {
     private var titlePlaceholder: String {
         switch kind {
         case .service:    return "Oil & filter service"
-        case .inspection: return "ITV inspection"
+        case .inspection: return "Inspection"
         case .insurance:  return "Insurance renewal"
         case .mileageCap: return "Mileage this month"
         }

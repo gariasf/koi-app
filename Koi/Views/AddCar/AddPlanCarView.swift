@@ -8,9 +8,25 @@ struct AddPlanCarView: View {
     var onSaved: (() -> Void)? = nil
 
     @State private var car = CarFormData()
-    @State private var plan = PlanFormData()
+    @State private var plan: PlanFormData = {
+        var p = PlanFormData()
+        let a = ProcessInfo.processInfo.arguments   // dev: `-plankind finance`
+        if let i = a.firstIndex(of: "-plankind"), i + 1 < a.count, let k = PlanKind(rawValue: a[i + 1]) {
+            p.kind = k; p.applyPreset()
+        }
+        return p
+    }()
 
     private var canSave: Bool { car.isValid && plan.isValid }
+
+    /// A short, plain description of the selected plan — shown under the type picker.
+    private var kindBlurb: String {
+        switch plan.kind {
+        case .subscription, .lease: return "A car you pay for monthly and hand back at the end. Some plans include insurance or upkeep, and some let you swap cars."
+        case .finance:              return "You're buying the car in monthly payments. It's yours once it's paid off."
+        case .owned:                return ""
+        }
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -18,10 +34,11 @@ struct AddPlanCarView: View {
             ScrollView {
                 VStack(spacing: 16) {
                     PlanKindSegmented(kind: $plan.kind)
-                    Text("Same form for all three — the preset sets the defaults below.")
-                        .koiStyle(.meta).foregroundStyle(KoiColors.textFaint)
+                    Text(kindBlurb)
+                        .koiStyle(.meta).foregroundStyle(KoiColors.textSecondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                    CarFieldsSection(data: $car)
+                        .fixedSize(horizontal: false, vertical: true)
+                    CarFieldsSection(data: $car, ownership: false)
                     PlanFieldsSection(data: $plan)
                 }
                 .padding(.horizontal, KoiSpace.gutter)
@@ -29,7 +46,7 @@ struct AddPlanCarView: View {
                 .padding(.bottom, 12)
             }
             .scrollDismissesKeyboard(.interactively)
-            KoiPrimaryButton(title: "Save plan", enabled: canSave) { save() }
+            KoiPrimaryButton(title: "Save car", enabled: canSave) { save() }
                 .padding(.horizontal, KoiSpace.gutter)
                 .padding(.top, 10)
                 .padding(.bottom, 12)

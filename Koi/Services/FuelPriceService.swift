@@ -6,7 +6,12 @@ struct FuelPriceService {
     private let base = "https://sedeaplicaciones.minetur.gob.es/ServiciosRESTCarburantes/PreciosCarburantes"
 
     func fetch(provinceID: String) async throws -> [FuelStation] {
-        let url = URL(string: "\(base)/EstacionesTerrestres/FiltroProvincia/\(provinceID)")!
+        // province codes are 2-digit INE codes — validate before interpolating into the path
+        let code = provinceID.filter(\.isNumber)
+        guard code.count == 2,
+              let url = URL(string: "\(base)/EstacionesTerrestres/FiltroProvincia/\(code)") else {
+            throw URLError(.badURL)
+        }
         var (data, _) = try await URLSession.shared.data(from: url)
         data = Self.stripBOM(data)   // the feed is served with a UTF-8 BOM
         let feed = try JSONDecoder().decode(Feed.self, from: data)

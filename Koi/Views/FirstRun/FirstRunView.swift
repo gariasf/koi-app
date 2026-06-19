@@ -16,9 +16,9 @@ struct FirstRunView: View {
                         .padding(.bottom, 36)
 
                     VStack(alignment: .leading, spacing: 6) {
-                        Text("Let's add your first car.")
+                        Text("Let’s add your first car.")
                             .koiStyle(.pageTitle).foregroundStyle(KoiColors.textPrimary)
-                        Text("One answer sets sensible defaults. How do you have it?")
+                        Text("One answer and we’ll set up the rest. How do you have it?")
                             .koiStyle(.body).foregroundStyle(KoiColors.textSecondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -33,7 +33,7 @@ struct FirstRunView: View {
                         }
                     }
 
-                    Text("Lease, finance and subscription share one shape — Koi just sets the right defaults.")
+                    Text("Subscription, lease and finance all work the same way here. Koi picks the right defaults for you.")
                         .koiStyle(.meta).foregroundStyle(KoiColors.textFaint)
                         .multilineTextAlignment(.leading)
                         .fixedSize(horizontal: false, vertical: true)
@@ -56,9 +56,8 @@ struct FirstRunView: View {
         .sheet(item: $presented) { r in
             Group {
                 switch r {
-                case .own:    AddOwnedCarView()
-                case .plan:   AddPlanCarView()
-                case .borrow: AddRentalView()
+                case .own:  AddOwnedCarView()
+                case .plan: AddPlanCarView()
                 }
             }
             .environmentObject(garage)

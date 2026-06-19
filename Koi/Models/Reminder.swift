@@ -3,12 +3,12 @@ import Foundation
 enum ReminderKind: String, Codable, CaseIterable {
     case service, inspection, insurance, mileageCap
 
-    /// SF Symbols placeholders for Lucide wrench / shield-check / umbrella / progress.
+    /// SF Symbols placeholders for Lucide wrench / shield-check / shield / progress.
     var icon: String {
         switch self {
         case .service:    return "wrench.adjustable"
         case .inspection: return "checkmark.seal"
-        case .insurance:  return "umbrella"
+        case .insurance:  return "shield.lefthalf.filled"
         case .mileageCap: return "chart.bar"
         }
     }

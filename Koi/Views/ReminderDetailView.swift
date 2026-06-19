@@ -1,75 +1,158 @@
 import SwiftUI
 
-/// A reminder, opened. Context + a calm, one-tap resolve (or a low-guilt snooze).
-/// The pattern for every "coming up" item.
+/// A reminder, opened. Two shapes:
+/// • a real reminder (inspection / service / insurance) → context + a one-tap resolve or a
+///   low-guilt snooze;
+/// • the live mileage-cap gauge → it can't be "done" or "snoozed" (it's a monthly meter), so it
+///   shows the gauge and lets you correct the odometer in place — the one input that moves it.
 struct ReminderDetailView: View {
     @EnvironmentObject private var garage: Garage
     @Environment(\.dismiss) private var dismiss
     let reminder: Reminder
 
+    @State private var odoText = ""
+    @State private var didUpdate = false
+
     private var urgency: Urgency { garage.urgency(reminder) }
+    private var isGauge: Bool { reminder.kind == .mileageCap }
+    private var car: Car? { garage.car(reminder.carID) }
+    private var gaugeTitle: String { "Mileage this " + (car.flatMap { garage.plan(for: $0)?.capPeriod.noun } ?? "month") }
 
     var body: some View {
         VStack(spacing: 0) {
-            ModalHeader(title: "Reminder")
+            ModalHeader(title: isGauge ? gaugeTitle : "Reminder")
+            ScrollView { isGauge ? AnyView(gaugeContent) : AnyView(reminderContent) }
+            footer
+        }
+        .background(KoiColors.surface.ignoresSafeArea())
+        .onAppear { if odoText.isEmpty, let km = car?.odometerKm { odoText = String(km) } }
+        .onChange(of: odoText) { _, _ in didUpdate = false }
+    }
 
-            ScrollView {
-                VStack(spacing: 18) {
-                    RoundedRectangle(cornerRadius: KoiRadius.tile, style: .continuous)
-                        .fill(urgency.tile.bg)
-                        .frame(width: 64, height: 64)
-                        .overlay(
-                            Image(systemName: reminder.kind.icon)
-                                .font(.system(size: 26, weight: .regular))
-                                .foregroundStyle(urgency.tile.fg)
-                        )
-                        .padding(.top, 12)
+    private var iconTile: some View {
+        RoundedRectangle(cornerRadius: KoiRadius.tile, style: .continuous)
+            .fill(urgency.tile.bg)
+            .frame(width: 64, height: 64)
+            .overlay(Image(systemName: reminder.kind.icon).font(.system(size: 26, weight: .regular))
+                .foregroundStyle(urgency.tile.fg))
+            .padding(.top, 12)
+    }
 
-                    VStack(spacing: 6) {
-                        Text(reminder.title).koiStyle(.glanceLine).foregroundStyle(KoiColors.textPrimary)
-                        Text(reminder.detail).koiStyle(.body).foregroundStyle(KoiColors.textSecondary)
-                    }
-                    .multilineTextAlignment(.center)
+    // MARK: live mileage-cap gauge
+    private var used: Int { car.flatMap { garage.kmThisCycle(for: $0) } ?? reminder.monthlyUsedKm ?? 0 }
+    private var cap: Int { reminder.monthlyCapKm ?? 0 }
+    private var fraction: Double { cap > 0 ? min(1, Double(used) / Double(cap)) : 0 }
+    private var gaugeColor: Color {
+        if used > cap { return KoiColors.red }
+        return fraction >= 0.8 ? KoiColors.ochre : KoiColors.sage
+    }
 
-                    Text(garage.countdown(reminder))
-                        .koiStyle(.monoMd).foregroundStyle(urgency.countdownColor)
-                        .padding(.horizontal, 14).padding(.vertical, 7)
-                        .background(urgency.tile.bg, in: Capsule())
+    private var gaugeContent: some View {
+        VStack(spacing: 18) {
+            iconTile
+            Text(car?.displayName ?? "Your car")
+                .koiStyle(.glanceLine).foregroundStyle(KoiColors.textPrimary)
+                .multilineTextAlignment(.center)
 
-                    if let date = reminder.dueDate {
-                        infoCard(label: "Due", value: date.formatted(.dateTime.day().month(.wide).year()))
-                    }
+            Text("\(used.formatted()) / \(cap.formatted()) km")
+                .koiStyle(.monoMd).foregroundStyle(KoiColors.textPrimary)
+            gaugeBar
+            Text(gaugeFootnote)
+                .koiStyle(.meta).foregroundStyle(KoiColors.textSubdued)
+                .multilineTextAlignment(.center)
 
-                    if reminder.kind == .insurance, let policy = policyForReminder {
-                        policyMiniCard(policy)
-                    }
+            odometerCard
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, KoiSpace.gutter)
+        .padding(.bottom, 12)
+    }
 
-                    Text("No rush — Koi will give you a gentle nudge again closer to the time.")
-                        .koiStyle(.meta).foregroundStyle(KoiColors.textSubdued)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 24)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.horizontal, KoiSpace.gutter)
-                .padding(.bottom, 12)
+    private var gaugeBar: some View {
+        GeometryReader { geo in
+            ZStack(alignment: .leading) {
+                Capsule().fill(KoiColors.insetFill)
+                Capsule().fill(gaugeColor).frame(width: max(10, geo.size.width * fraction))
             }
+        }
+        .frame(height: 10)
+    }
 
+    private var gaugeFootnote: String {
+        let days = car.map { garage.daysUntilMileageReset(for: $0) } ?? 0
+        let resets = days == 0 ? "resets today" : "resets in \(days) day\(days == 1 ? "" : "s")"
+        if used > cap { return "\((used - cap).formatted()) km over · \(resets)" }
+        return "\(max(0, cap - used).formatted()) km to go · \(resets)"
+    }
+
+    private var odometerCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            KoiField(label: "Odometer (km)", placeholder: "Current reading",
+                     text: $odoText, mono: true, keyboard: .numberPad, grouped: true)
+            Text("Koi reads the month from your odometer. Update it and the gauge follows.")
+                .koiStyle(.meta).foregroundStyle(KoiColors.textFaint)
+        }
+        .koiCard()
+        .padding(.top, 4)
+    }
+
+    // MARK: standard reminder
+    private var reminderContent: some View {
+        VStack(spacing: 18) {
+            iconTile
+            VStack(spacing: 6) {
+                Text(reminder.title).koiStyle(.glanceLine).foregroundStyle(KoiColors.textPrimary)
+                Text(reminder.detail).koiStyle(.body).foregroundStyle(KoiColors.textSecondary)
+            }
+            .multilineTextAlignment(.center)
+
+            Text(garage.countdown(reminder))
+                .koiStyle(.monoMd).foregroundStyle(urgency.countdownColor)
+                .padding(.horizontal, 14).padding(.vertical, 7)
+                .background(urgency.tile.bg, in: Capsule())
+
+            if let date = reminder.dueDate {
+                infoCard(label: "Due", value: date.formatted(.dateTime.day().month(.wide).year()))
+            }
+            if reminder.kind == .insurance, let policy = policyForReminder { policyMiniCard(policy) }
+
+            Text("No rush. Koi will nudge you again closer to the time.")
+                .koiStyle(.meta).foregroundStyle(KoiColors.textSubdued)
+                .multilineTextAlignment(.center).padding(.horizontal, 24)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, KoiSpace.gutter)
+        .padding(.bottom, 12)
+    }
+
+    // MARK: footer (actions differ by shape)
+    @ViewBuilder private var footer: some View {
+        if isGauge {
+            KoiPrimaryButton(title: didUpdate ? "Updated" : "Update odometer",
+                             systemIcon: didUpdate ? "checkmark" : nil, enabled: canUpdate) {
+                if let km = parsedOdo {
+                    garage.setOdometer(km, for: reminder.carID); Haptics.success(); didUpdate = true
+                }
+            }
+            .padding(.horizontal, KoiSpace.gutter).padding(.top, 8).padding(.bottom, 12)
+        } else {
             VStack(spacing: 10) {
                 KoiPrimaryButton(title: primaryTitle, systemIcon: "checkmark") {
                     garage.resolve(reminder); Haptics.success(); dismiss()
                 }
-                Button { garage.snooze(reminder); dismiss() } label: {
-                    Text("Remind me later").koiStyle(.body).foregroundStyle(KoiColors.textSecondary)
+                KoiTextButton(title: "Remind me later", role: .muted) {
+                    garage.snooze(reminder); Haptics.tap(); dismiss()
                 }
-                .buttonStyle(.plain)
             }
-            .padding(.horizontal, KoiSpace.gutter)
-            .padding(.top, 8)
-            .padding(.bottom, 12)
+            .padding(.horizontal, KoiSpace.gutter).padding(.top, 8).padding(.bottom, 12)
         }
-        .background(KoiColors.surface.ignoresSafeArea())
     }
 
+    private var parsedOdo: Int? { Int(odoText.filter(\.isNumber)) }
+    private var canUpdate: Bool {
+        guard let km = parsedOdo, km > 0 else { return false }
+        return km != (car?.odometerKm ?? -1)
+    }
     private var primaryTitle: String {
         switch reminder.kind {
         case .insurance:  return "Mark as renewed"
@@ -101,7 +184,7 @@ struct ReminderDetailView: View {
             }
             HStack(spacing: 10) {
                 if let prem = p.premium {
-                    Text(KoiFormat.money(prem, code: p.currency) + " / yr")
+                    Text(KoiFormat.money(prem, code: p.currency) + "/yr")
                         .koiStyle(.monoMd).foregroundStyle(KoiColors.textPrimary)
                 }
                 if let last = p.premiumLastYear {
@@ -134,5 +217,6 @@ private extension Urgency {
 
 #Preview {
     let g = Garage.preview
-    return ReminderDetailView(reminder: g.comingUp.first!).environmentObject(g)
+    return ReminderDetailView(reminder: g.activeReminders.first { $0.kind == .mileageCap } ?? g.comingUp.first!)
+        .environmentObject(g)
 }

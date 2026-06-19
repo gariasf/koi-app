@@ -12,20 +12,22 @@ struct AddPolicyView: View {
     @State private var premium = ""
     @State private var validTo = Date().addingTimeInterval(365 * 86_400)
 
+    // Europe-English coverage tiers (regionalised later, e.g. ES "todo riesgo / terceros").
+    private let coverageOptions = ["Comprehensive", "Third-party plus", "Third-party"]
     private var canSave: Bool { !insurer.trimmingCharacters(in: .whitespaces).isEmpty }
 
     var body: some View {
         VStack(spacing: 0) {
-            ModalHeader(title: "Add a policy")
+            ModalHeader(title: "New policy")
 
             ScrollView {
                 VStack(spacing: 16) {
                     KoiField(label: "Insurer", placeholder: "Mapfre", text: $insurer)
                     KoiField(label: "Policy number", placeholder: "ES-4471 8820", text: $number, mono: true, uppercased: true)
-                    KoiField(label: "Coverage", placeholder: "Comprehensive", text: $coverage)
-                    KoiField(label: "Premium / yr", placeholder: "€412", text: $premium, keyboard: .numberPad)
+                    coveragePicker
+                    KoiField(label: "Premium", placeholder: "€412", text: $premium, mono: true, keyboard: .decimalPad)
                     VStack(alignment: .leading, spacing: 6) {
-                        Text("Renews").koiStyle(.eyebrow).foregroundStyle(KoiColors.textSubdued)
+                        Text("Valid until").koiStyle(.eyebrow).foregroundStyle(KoiColors.textSubdued)
                         DatePicker("", selection: $validTo, displayedComponents: .date)
                             .labelsHidden().tint(KoiColors.sage)
                     }
@@ -44,13 +46,33 @@ struct AddPolicyView: View {
         .background(KoiColors.surface.ignoresSafeArea())
     }
 
+    private var coveragePicker: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Coverage").koiStyle(.eyebrow).foregroundStyle(KoiColors.textSubdued)
+            Menu {
+                Picker("Coverage", selection: $coverage) {
+                    ForEach(coverageOptions, id: \.self) { Text($0).tag($0) }
+                }
+            } label: {
+                HStack {
+                    Text(coverage).koiStyle(.body).foregroundStyle(KoiColors.textPrimary)
+                    Spacer()
+                    Image(systemName: "chevron.up.chevron.down").font(.system(size: 12)).foregroundStyle(KoiColors.textSubdued)
+                }
+                .padding(.horizontal, 14).padding(.vertical, 12)
+                .background(KoiColors.fieldFill, in: RoundedRectangle(cornerRadius: KoiRadius.field, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: KoiRadius.field, style: .continuous).strokeBorder(KoiColors.border, lineWidth: 1))
+            }
+        }
+    }
+
     private func save() {
         let policy = InsurancePolicy(
             carID: car.id,
             insurer: insurer.trimmingCharacters(in: .whitespaces),
             policyNumber: number.trimmingCharacters(in: .whitespaces),
             coverage: coverage.trimmingCharacters(in: .whitespaces).isEmpty ? "Comprehensive" : coverage,
-            premium: Decimal(string: premium.filter { $0.isNumber || $0 == "." }),
+            premium: KoiFormat.decimal(premium),
             premiumLastYear: nil,
             validFrom: Date(),
             validTo: validTo

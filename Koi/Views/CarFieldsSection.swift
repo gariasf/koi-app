@@ -13,12 +13,14 @@ struct CarFormData {
     var nickname = ""
     var fuelType: FuelType = .petrol
     // advanced / optional
+    var tank = ""
+    var initialOdometer = ""
     var registrationYear = ""
     var purchaseYear = ""
     var power = ""
     var fiscalPower = ""
-    var torque = ""
     var purchasePrice = ""
+    var vin = ""
 
     init() {}
 
@@ -30,12 +32,14 @@ struct CarFormData {
         plate = car.plate ?? ""
         nickname = car.nickname ?? ""
         fuelType = car.fuel
+        tank = car.tankCapacityL.map { $0 == $0.rounded() ? String(Int($0)) : String($0) } ?? ""
+        initialOdometer = car.initialOdometerKm.map(String.init) ?? ""
         registrationYear = car.registrationYear.map(String.init) ?? ""
         purchaseYear = car.purchaseYear.map(String.init) ?? ""
         power = car.powerHP.map(String.init) ?? ""
         fiscalPower = car.fiscalPowerCV.map { String($0) } ?? ""
-        torque = car.torqueNm.map(String.init) ?? ""
         purchasePrice = car.purchasePrice.map { NSDecimalNumber(decimal: $0).stringValue } ?? ""
+        vin = car.vin ?? ""
     }
 
     var isValid: Bool { !makeModel.trimmingCharacters(in: .whitespaces).isEmpty }
@@ -52,12 +56,15 @@ struct CarFormData {
         let n = nickname.trimmingCharacters(in: .whitespaces)
         car.nickname = n.isEmpty ? nil : n
         car.fuelType = fuelType
+        car.tankCapacityL = KoiFormat.double(tank)
+        car.initialOdometerKm = Int(initialOdometer.filter(\.isNumber))
         car.registrationYear = Int(registrationYear.filter(\.isNumber))
         car.purchaseYear = Int(purchaseYear.filter(\.isNumber))
         car.powerHP = Int(power.filter(\.isNumber))
-        car.fiscalPowerCV = Double(fiscalPower.replacingOccurrences(of: ",", with: "."))
-        car.torqueNm = Int(torque.filter(\.isNumber))
-        car.purchasePrice = Decimal(string: purchasePrice.filter { $0.isNumber || $0 == "." })
+        car.fiscalPowerCV = KoiFormat.double(fiscalPower)
+        car.purchasePrice = KoiFormat.decimal(purchasePrice)
+        let vinTrimmed = vin.trimmingCharacters(in: .whitespaces)
+        car.vin = vinTrimmed.isEmpty ? nil : vinTrimmed
         car.photo = photoData
         if let photoData, let image = UIImage(data: photoData) {
             car.accent = CarAccent.derive(from: image)
@@ -67,6 +74,9 @@ struct CarFormData {
 
 struct CarFieldsSection: View {
     @Binding var data: CarFormData
+    /// Owned cars show ownership fields (bought year + purchase price); cars on a plan don't —
+    /// a plan has a deposit, not a purchase price.
+    var ownership: Bool = true
     @State private var photoItem: PhotosPickerItem?
     @State private var showMore = false
 
@@ -75,9 +85,12 @@ struct CarFieldsSection: View {
             photoSlot
             KoiField(label: "Make & model", placeholder: "Volkswagen Golf", text: $data.makeModel)
             HStack(alignment: .top, spacing: 12) {
-                KoiField(label: "Year", placeholder: "2018", text: $data.year, keyboard: .numberPad)
-                KoiField(label: "Odometer", placeholder: "142,300", text: $data.odometer, mono: true, keyboard: .numberPad, grouped: true)
+                KoiField(label: "Registered", placeholder: "2018", text: $data.registrationYear, keyboard: .numberPad)
+                KoiField(label: "Odometer (now)", placeholder: "142,300", text: $data.odometer, mono: true, keyboard: .numberPad, grouped: true)
             }
+            KoiField(label: "Odometer at start (optional)", placeholder: "120,000", text: $data.initialOdometer,
+                     mono: true, keyboard: .numberPad,
+                     hint: "The reading when you first got the car, for total km driven.", grouped: true)
             KoiField(label: "Plate (optional)", placeholder: "4821 KPD", text: $data.plate, mono: true, uppercased: true)
             KoiField(label: "Nickname (optional)", placeholder: "Betsy", text: $data.nickname,
                      hint: "Shown instead of the model")
@@ -120,18 +133,24 @@ struct CarFieldsSection: View {
         .padding(.top, 2)
 
         if showMore {
-            HStack(alignment: .top, spacing: 12) {
-                KoiField(label: "First registered", placeholder: "2018", text: $data.registrationYear, keyboard: .numberPad)
-                KoiField(label: "Bought", placeholder: "2021", text: $data.purchaseYear, keyboard: .numberPad)
-            }
+            KoiField(label: "Model year", placeholder: "2018", text: $data.year, keyboard: .numberPad,
+                     hint: "Only if it differs from the registration year")
+            KoiField(label: "VIN (optional)", placeholder: "WVWZZZ1KZAW000000", text: $data.vin, mono: true, uppercased: true)
             HStack(alignment: .top, spacing: 12) {
                 KoiField(label: "Power (CV)", placeholder: "150", text: $data.power, mono: true, keyboard: .numberPad)
-                KoiField(label: "Torque (Nm)", placeholder: "320", text: $data.torque, mono: true, keyboard: .numberPad)
+                KoiField(label: "Fiscal power", placeholder: "11,88", text: $data.fiscalPower, mono: true, keyboard: .decimalPad)
             }
-            KoiField(label: "Fiscal power (CVF)", placeholder: "11.88", text: $data.fiscalPower, mono: true,
-                     keyboard: .decimalPad, hint: "From the vehicle papers (ficha técnica)")
-            KoiField(label: "Purchase price (€)", placeholder: "18,500", text: $data.purchasePrice, mono: true,
-                     keyboard: .numberPad, grouped: true)
+            if data.fuelType != .electric {
+                KoiField(label: "Tank size (L)", placeholder: "50", text: $data.tank, mono: true, keyboard: .decimalPad,
+                         hint: "Lets you tap “Fill to full” when you log fuel")
+            }
+            if ownership {
+                HStack(alignment: .top, spacing: 12) {
+                    KoiField(label: "Bought", placeholder: "2021", text: $data.purchaseYear, keyboard: .numberPad)
+                    KoiField(label: "Purchase price (€)", placeholder: "18,500", text: $data.purchasePrice, mono: true,
+                             keyboard: .decimalPad)
+                }
+            }
         }
     }
 
@@ -162,8 +181,11 @@ struct CarFieldsSection: View {
         }
         .buttonStyle(.plain)
         .onChange(of: photoItem) {
-            Task { @MainActor in
-                if let d = try? await photoItem?.loadTransferable(type: Data.self) { data.photoData = d }
+            Task {
+                guard let raw = try? await photoItem?.loadTransferable(type: Data.self) else { return }
+                // downscale + strip metadata off the main actor, then assign on it
+                let prepared = await Task.detached { UIImage(data: raw)?.preparedForStorage() ?? raw }.value
+                await MainActor.run { data.photoData = prepared }
             }
         }
     }

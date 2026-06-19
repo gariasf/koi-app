@@ -1,25 +1,33 @@
 import SwiftUI
 
-enum KoiTab { case glance, garage }
+enum KoiTab { case glance, timeline, log, garage }
 
-/// The app shell once a car exists: Glance ⇄ Garage via a custom bottom bar,
-/// with a raised central ＋ Log that presents the quick-add sheet for the active car.
+/// The app shell once a car exists.
+/// iOS 26+: the genuine native Liquid Glass tab bar — Glance · Garage as glass tabs, with Log as
+/// the detached glass circle beside them (the `.search`-role slot, the Withings shape).
+/// Earlier iOS: a custom floating glass capsule + detached Log circle, with swipe + spring slide.
+/// Either way, Log is an action: it opens the quick-add sheet rather than being a destination.
 struct RootTabView: View {
     @EnvironmentObject private var garage: Garage
     @EnvironmentObject private var fuel: FuelPriceStore
-    @State private var tab: KoiTab =
-        ProcessInfo.processInfo.arguments.contains("-garage") ? .garage : .glance
+    @State private var tab: KoiTab = {
+        let a = ProcessInfo.processInfo.arguments
+        if a.contains("-garage") { return .garage }
+        if a.contains("-story") { return .timeline }
+        return .glance
+    }()
     @State private var showLog = false
     @State private var devScreen: String? = RootTabView.devScreenArg()
     @State private var garagePath = NavigationPath()
+    @Namespace private var tabNS
 
     var body: some View {
-        content
-            .safeAreaInset(edge: .bottom, spacing: 0) { tabBar }
+        shell
             .sheet(isPresented: $showLog) {
                 if let car = garage.activeCar {
                     LogSheetView(car: car)
                         .environmentObject(garage)
+                        .environmentObject(fuel)
                         .presentationDragIndicator(.visible)
                 }
             }
@@ -27,6 +35,130 @@ struct RootTabView: View {
                                         set: { if !$0 { devScreen = nil } })) {
                 devScreenContent.presentationDragIndicator(.visible)
             }
+    }
+
+    @ViewBuilder private var shell: some View {
+        if #available(iOS 26.0, *) {
+            nativeShell
+        } else {
+            legacyShell
+        }
+    }
+
+    // MARK: iOS 26 — genuine native Liquid Glass tab bar + detached `.search` Log circle
+    @available(iOS 26.0, *)
+    private var nativeShell: some View {
+        TabView(selection: $tab) {
+            Tab("Glance", systemImage: "smallcircle.filled.circle", value: KoiTab.glance) {
+                GlanceView()
+            }
+            Tab("Story", systemImage: "clock.arrow.circlepath", value: KoiTab.timeline) {
+                TimelineView()
+            }
+            Tab("Garage", systemImage: "car.2.fill", value: KoiTab.garage) {
+                NavigationStack(path: $garagePath) { GarageView() }
+            }
+            Tab("Log", systemImage: "square.and.pencil", value: KoiTab.log, role: .search) {
+                Color.clear
+            }
+        }
+        .tint(KoiColors.sage)
+        .onChange(of: tab) { old, new in
+            if new == .log {
+                tab = old                       // Log is an action — bounce back + open the sheet
+                showLog = true
+            } else if old != new {
+                garagePath = NavigationPath()
+            }
+        }
+    }
+
+    // MARK: pre-iOS-26 fallback — custom floating glass capsule + detached Log circle, paged content
+    private var legacyShell: some View {
+        legacyContent
+            .safeAreaInset(edge: .bottom, spacing: 0) { legacyTabBar }
+            .onChange(of: tab) { _, _ in garagePath = NavigationPath() }
+    }
+
+    private var legacyContent: some View {
+        TabView(selection: $tab) {
+            GlanceView()
+                .tag(KoiTab.glance)
+            TimelineView()
+                .tag(KoiTab.timeline)
+            NavigationStack(path: $garagePath) { GarageView() }
+                .tag(KoiTab.garage)
+        }
+        .tabViewStyle(.page(indexDisplayMode: .never))
+    }
+
+    private var legacyTabBar: some View {
+        HStack(spacing: 10) {
+            navCapsule
+            logCircle
+        }
+        .padding(.horizontal, KoiSpace.gutter)
+        .padding(.top, 6)
+    }
+
+    private var navCapsule: some View {
+        HStack(spacing: 2) {
+            navTab(.glance, label: "Glance") {
+                RippleMark(size: 22, color: tab == .glance ? KoiColors.sage : KoiColors.textSubdued)
+            }
+            navTab(.timeline, label: "Story") {
+                Image(systemName: "clock.arrow.circlepath")
+                    .font(.system(size: 17, weight: .regular))
+                    .foregroundStyle(tab == .timeline ? KoiColors.textPrimary : KoiColors.textSubdued)
+            }
+            navTab(.garage, label: "Garage") {
+                Image(systemName: "car.2.fill")
+                    .font(.system(size: 17, weight: .regular))
+                    .foregroundStyle(tab == .garage ? KoiColors.textPrimary : KoiColors.textSubdued)
+            }
+        }
+        .padding(5)
+        .frame(maxWidth: .infinity)
+        .modifier(KoiGlassCapsule())
+    }
+
+    private func navTab<Icon: View>(_ target: KoiTab, label: String, @ViewBuilder icon: () -> Icon) -> some View {
+        Button {
+            if tab == target {
+                if target == .garage { garagePath = NavigationPath() }
+            } else {
+                withAnimation(.snappy(duration: 0.3)) { tab = target }
+            }
+        } label: {
+            VStack(spacing: 3) {
+                icon().frame(height: 24)
+                Text(label).koiStyle(.tabLabel)
+                    .foregroundStyle(tab == target ? KoiColors.textPrimary : KoiColors.textSubdued)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 8)
+            .background {
+                if tab == target {
+                    Capsule().fill(KoiColors.container.opacity(0.6))
+                        .matchedGeometryEffect(id: "koiActiveTab", in: tabNS)
+                }
+            }
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var logCircle: some View {
+        Button { showLog = true } label: {
+            Image(systemName: "pencil")
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: 56, height: 56)
+                .modifier(KoiGlassLogCircle())
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Log")
     }
 
     // Dev-only deep-links for screenshots: launch with `-screen <name>`.
@@ -39,88 +171,46 @@ struct RootTabView: View {
 
     @ViewBuilder private var devScreenContent: some View {
         switch devScreen {
-        case "log":          if let c = garage.activeCar { LogSheetView(car: c).environmentObject(garage) }
+        case "log":          if let c = garage.activeCar { LogSheetView(car: c).environmentObject(garage).environmentObject(fuel) }
         case "cardetail":    if let c = garage.residents.first { NavigationStack { CarDetailView(car: c).environmentObject(garage) } }
         case "cardetailsub": if let c = garage.residents.last { NavigationStack { CarDetailView(car: c).environmentObject(garage) } }
         case "addplan":      NavigationStack { AddPlanCarView().environmentObject(garage) }
         case "addowned":     NavigationStack { AddOwnedCarView().environmentObject(garage) }
         case "editcar":      if let c = garage.residents.first { EditCarView(car: c).environmentObject(garage) }
         case "editcarsub":   if let c = garage.residents.last { EditCarView(car: c).environmentObject(garage) }
-        case "addrental":    NavigationStack { AddRentalView().environmentObject(garage) }
         case "settings":     SettingsView().environmentObject(fuel)
+        case "privacy":      PrivacyPolicyView()
+        case "adddoc":       if let c = garage.residents.first { AddDocumentView(car: c).environmentObject(garage) }
+        case "import":       MyCarImportView().environmentObject(garage)
         case "vault":        if let c = garage.residents.first { InsuranceVaultView(car: c).environmentObject(garage) }
-        case "reminder":     if let r = garage.comingUp.first { ReminderDetailView(reminder: r).environmentObject(garage) }
+        case "reminder":     if let r = garage.activeReminders.first(where: { $0.kind == .mileageCap }) ?? garage.comingUp.first ?? garage.nextHorizon { ReminderDetailView(reminder: r).environmentObject(garage) }
         case "firstrun":     FirstRunView().environmentObject(garage)
         default:             EmptyView()
         }
     }
+}
 
-    @ViewBuilder private var content: some View {
-        switch tab {
-        case .glance:
-            GlanceView()
-        case .garage:
-            NavigationStack(path: $garagePath) { GarageView() }
+/// The nav capsule's surface — genuine Liquid Glass on iOS 26, blur material fallback.
+private struct KoiGlassCapsule: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            content.glassEffect(.regular, in: Capsule())
+        } else {
+            content
+                .background(.ultraThinMaterial, in: Capsule())
+                .overlay(Capsule().strokeBorder(KoiColors.ring, lineWidth: 1))
         }
     }
+}
 
-    private var tabBar: some View {
-        HStack(spacing: 0) {
-            tabButton(.glance, label: "Glance") {
-                RippleMark(size: 24, color: tab == .glance ? KoiColors.sage : KoiColors.textSubdued)
-            }
-            logButton.frame(width: 76)
-            tabButton(.garage, label: "Garage") {
-                Image(systemName: "square.grid.2x2")
-                    .font(.system(size: 20, weight: .regular))
-                    .foregroundStyle(tab == .garage ? KoiColors.textPrimary : KoiColors.textSubdued)
-            }
+/// The detached Log action — sage-tinted Liquid Glass on iOS 26, solid sage fallback.
+private struct KoiGlassLogCircle: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            content.glassEffect(.regular.tint(KoiColors.sage).interactive(), in: Circle())
+        } else {
+            content.background(KoiColors.sage, in: Circle())
         }
-        .padding(.top, 10)
-        .padding(.bottom, 4)
-        .background(KoiColors.surface)
-        .overlay(alignment: .top) {
-            Rectangle().fill(KoiColors.hairline).frame(height: 1)
-        }
-    }
-
-    private func tabButton<Icon: View>(_ target: KoiTab,
-                                       label: String,
-                                       @ViewBuilder icon: () -> Icon) -> some View {
-        Button {
-            if tab == target {
-                if target == .garage { garagePath = NavigationPath() }   // re-tap active tab → back to list
-            } else {
-                tab = target
-            }
-        } label: {
-            VStack(spacing: 4) {
-                icon()
-                Text(label).koiStyle(.tabLabel)
-                    .foregroundStyle(tab == target ? KoiColors.textPrimary : KoiColors.textSubdued)
-            }
-            .frame(maxWidth: .infinity, minHeight: 48)   // full-width, generous tap target
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-    }
-
-    private var logButton: some View {
-        Button { showLog = true } label: {
-            Circle()
-                .fill(KoiColors.sage)
-                .frame(width: 56, height: 56)
-                .overlay(
-                    Image(systemName: "plus")
-                        .font(.system(size: 22, weight: .medium))
-                        .foregroundStyle(.white)
-                )
-                .shadow(color: KoiColors.sage.opacity(0.35), radius: 10, x: 0, y: 4)
-                .offset(y: -20)
-                .contentShape(Circle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Log")
     }
 }
 

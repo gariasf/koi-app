@@ -1,6 +1,7 @@
 import SwiftUI
+import UIKit
 
-/// The shelf — every car at a glance. Residents (on a plan) + guests (rentals).
+/// The shelf — every car you live with, at a glance.
 struct GarageView: View {
     @EnvironmentObject private var garage: Garage
     @State private var showAdd = false
@@ -8,10 +9,9 @@ struct GarageView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
-                titleRow
-
                 if !garage.residents.isEmpty {
-                    Eyebrow(text: "Residents").padding(.top, 4)
+                    Eyebrow(text: "Residents")
+                        .padding(.bottom, 14)   // clear the floating ＋ so the first card isn't flush under it
                     ForEach(garage.residents) { car in
                         NavigationLink(value: car) {
                             ResidentCard(car: car,
@@ -22,49 +22,42 @@ struct GarageView: View {
                     }
                 }
 
-                if !garage.rentals.isEmpty {
-                    Eyebrow(text: "Guests · past rentals").padding(.top, 8)
-                    ForEach(garage.rentals) { rental in
-                        NavigationLink(value: rental) { GuestRow(rental: rental) }
-                            .buttonStyle(.plain)
+                if !garage.archivedCars.isEmpty {
+                    Eyebrow(text: "Archived")
+                        .padding(.top, garage.residents.isEmpty ? 14 : 18)
+                    VStack(spacing: 0) {
+                        ForEach(Array(garage.archivedCars.enumerated()), id: \.element.id) { idx, car in
+                            ArchivedRow(car: car) { garage.unarchiveCar(car); Haptics.success() }
+                            if idx < garage.archivedCars.count - 1 {
+                                Rectangle().fill(KoiColors.hairline).frame(height: 1).padding(.leading, 14)
+                            }
+                        }
                     }
+                    .koiCard(padding: 0)
                 }
             }
             .padding(.horizontal, KoiSpace.gutter)
-            .padding(.top, 8)
+            .padding(.top, 28)
             .padding(.bottom, 16)
         }
+        // The ＋ floats OVER the list as an overlay (NOT a sibling of the card NavigationLinks — that
+        // mis-routes the first tap on iOS 17), so the cards scroll cleanly beneath it with no header
+        // band cutting in. Bonus: the glass now has content behind it to refract while you scroll.
+        .overlay(alignment: .topTrailing) {
+            KoiIconButton(systemName: "plus", accessibilityLabel: "Add a car", style: .glass) { showAdd = true }
+                .padding(.trailing, KoiSpace.gutter)
+                .padding(.top, 18)
+        }
         .background(KoiColors.surface.ignoresSafeArea())
-        .navigationTitle("Garage")
         .toolbar(.hidden, for: .navigationBar)
         .navigationDestination(for: Car.self) { car in
             CarDetailView(car: car)
-        }
-        .navigationDestination(for: Rental.self) { rental in
-            RentalDetailView(rental: rental)
         }
         .sheet(isPresented: $showAdd) {
             AddCarSheet().environmentObject(garage)
         }
     }
 
-    private var titleRow: some View {
-        HStack {
-            Text("Garage").koiStyle(.pageTitle).foregroundStyle(KoiColors.textPrimary)
-            Spacer()
-            Button { showAdd = true } label: {
-                Image(systemName: "plus")
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundStyle(KoiColors.textPrimary)
-                    .frame(width: 38, height: 38)
-                    .background(KoiColors.container, in: Circle())
-                    .overlay(Circle().strokeBorder(KoiColors.ring, lineWidth: 1))
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Add a car")
-        }
-        .padding(.top, 4)
-    }
 }
 
 /// A resident card: per-car-tinted photo tile + name + type pill + meta + mono odometer.
@@ -100,6 +93,7 @@ struct ResidentCard: View {
                 .strokeBorder(KoiColors.ring, lineWidth: 1)
         )
         .shadow(color: KoiColors.cardShadow, radius: 2, x: 0, y: 1)
+        .contentShape(RoundedRectangle(cornerRadius: KoiRadius.card, style: .continuous))
     }
 
     private var metaLine: String {
@@ -107,32 +101,51 @@ struct ResidentCard: View {
     }
 }
 
-/// A guest (rental) episode — lighter than a resident card.
-struct GuestRow: View {
-    let rental: Rental
+/// A shelved car: muted row that taps through to its detail, with a quick restore on the side.
+struct ArchivedRow: View {
+    let car: Car
+    let onRestore: () -> Void
 
     var body: some View {
         HStack(spacing: 12) {
-            RoundedRectangle(cornerRadius: KoiRadius.tile, style: .continuous)
-                .fill(CarAccent.terracotta.tile)
-                .frame(width: 46, height: 46)
-                .overlay(
-                    Text(rental.car.model.isEmpty ? "—" : String(rental.car.model.prefix(3)))
-                        .koiStyle(.monoSm).foregroundStyle(CarAccent.terracotta.text)
-                )
-            VStack(alignment: .leading, spacing: 3) {
-                Text("\(rental.car.displayName) · \(rental.company)")
-                    .koiStyle(.listTitle).foregroundStyle(KoiColors.textPrimary)
-                Text("\(KoiFormat.shortDate(rental.pickup)) – \(KoiFormat.shortDate(rental.dropoff))")
-                    .koiStyle(.meta).foregroundStyle(KoiColors.textSecondary)
+            NavigationLink(value: car) {
+                HStack(spacing: 12) {
+                    thumb
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(car.displayName).koiStyle(.listTitle).foregroundStyle(KoiColors.textSecondary)
+                        if !car.subtitle.isEmpty {
+                            Text(car.subtitle).koiStyle(.meta).foregroundStyle(KoiColors.textSubdued)
+                        }
+                    }
+                    Spacer(minLength: 8)
+                }
+                .contentShape(Rectangle())
             }
-            Spacer(minLength: 8)
-            Text(rental.returned ? "Returned" : "Active")
-                .koiStyle(.meta).foregroundStyle(KoiColors.textSubdued)
-                .padding(.horizontal, 10).padding(.vertical, 4)
-                .background(KoiColors.insetFill, in: Capsule())
+            .buttonStyle(.plain)
+
+            Button(action: onRestore) {
+                Image(systemName: "tray.and.arrow.up")
+                    .font(.system(size: 18, weight: .regular))
+                    .foregroundStyle(car.accent.text)
+                    .frame(width: 40, height: 40)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Move \(car.displayName) back to garage")
         }
-        .koiCard()
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+    }
+
+    @ViewBuilder private var thumb: some View {
+        if let d = car.photo, let ui = UIImage(data: d) {
+            Image(uiImage: ui).resizable().scaledToFill()
+                .frame(width: 40, height: 40)
+                .clipShape(RoundedRectangle(cornerRadius: KoiRadius.tile, style: .continuous))
+                .saturation(0.4).opacity(0.8)
+        } else {
+            IconTile(systemName: "car", tint: .sage)
+        }
     }
 }
 
@@ -160,9 +173,8 @@ struct AddCarSheet: View {
         .sheet(item: $selected) { r in
             Group {
                 switch r {
-                case .own:    AddOwnedCarView(onSaved: { dismiss() })
-                case .plan:   AddPlanCarView(onSaved: { dismiss() })
-                case .borrow: AddRentalView(onSaved: { dismiss() })
+                case .own:  AddOwnedCarView(onSaved: { dismiss() })
+                case .plan: AddPlanCarView(onSaved: { dismiss() })
                 }
             }
             .environmentObject(garage)

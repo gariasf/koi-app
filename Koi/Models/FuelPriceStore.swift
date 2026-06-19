@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import CoreLocation
 
 /// Live local fuel price — the daily-fresh hook. Fetches the selected province from the
 /// minetur feed, caches it (offline-tolerant), and surfaces the cheapest station.
@@ -8,8 +9,9 @@ final class FuelPriceStore: ObservableObject {
     @Published private(set) var stations: [FuelStation] = []
     @Published private(set) var lastUpdated: Date?
     @Published private(set) var isLoading = false
-    @Published var provinceID: String { didSet { save() } }
-    @Published var product: FuelProduct { didSet { save() } }
+    @Published var provinceID: String { didSet { if !isLoadingCache { save() } } }
+    @Published var product: FuelProduct { didSet { if !isLoadingCache { save() } } }
+    private var isLoadingCache = false   // suppresses didSet→save while reading the cache file
 
     var provinceName: String { Province.name(for: provinceID) }
 
@@ -32,17 +34,29 @@ final class FuelPriceStore: ObservableObject {
             .min { (product.price($0) ?? .infinity) < (product.price($1) ?? .infinity) }
     }
 
+    /// The closest station (selling the product) to a coordinate, with its distance in km.
+    func closest(to coord: CLLocationCoordinate2D, product: FuelProduct) -> (station: FuelStation, distanceKm: Double)? {
+        let here = CLLocation(latitude: coord.latitude, longitude: coord.longitude)
+        let priced = stations.compactMap { s -> (FuelStation, Double)? in
+            guard let lat = s.latitude, let lon = s.longitude, product.price(s) != nil else { return nil }
+            return (s, here.distance(from: CLLocation(latitude: lat, longitude: lon)) / 1000)
+        }
+        return priced.min(by: { $0.1 < $1.1 }).map { ($0.0, $0.1) }
+    }
+
     var freshnessText: String {
         guard let t = lastUpdated else { return "" }
         let mins = Int(Date().timeIntervalSince(t) / 60)
-        if mins < 1 { return "just now" }
-        if mins < 60 { return "\(mins)m ago" }
+        if mins < 1 { return "Updated just now" }
+        if mins < 60 { return "Updated \(mins)m ago" }
         let hrs = mins / 60
-        return hrs < 24 ? "\(hrs)h ago" : "\(hrs / 24)d ago"
+        return hrs < 24 ? "Updated \(hrs)h ago" : "Updated \(hrs / 24)d ago"
     }
 
     func refresh(province: String? = nil) async {
         guard !isLoading else { return }
+        // prices move ~daily — skip the network + parse if the cache is still fresh
+        if province == nil, !stations.isEmpty, let t = lastUpdated, Date().timeIntervalSince(t) < 6 * 3600 { return }
         isLoading = true
         defer { isLoading = false }
         do {
@@ -80,6 +94,8 @@ final class FuelPriceStore: ObservableObject {
     private func load() {
         guard let url = fileURL, let data = try? Data(contentsOf: url),
               let c = try? JSONDecoder().decode(Cache.self, from: data) else { return }
+        isLoadingCache = true
+        defer { isLoadingCache = false }
         stations = c.stations
         lastUpdated = c.lastUpdated
         provinceID = c.provinceID
@@ -89,7 +105,9 @@ final class FuelPriceStore: ObservableObject {
     private func save() {
         guard persists, let url = fileURL else { return }
         let c = Cache(stations: stations, lastUpdated: lastUpdated, provinceID: provinceID, product: product)
-        if let data = try? JSONEncoder().encode(c) { try? data.write(to: url, options: .atomic) }
+        if let data = try? JSONEncoder().encode(c) {
+            try? data.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+        }
     }
 
     // MARK: Sample (SwiftUI previews + `-seed`)

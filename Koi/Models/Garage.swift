@@ -1,13 +1,12 @@
 import Foundation
 import Combine
 
-/// Local-first store for the whole garage. Residents (current car of each plan) +
-/// guests (rentals) + fuel logs. Persists to JSON in Application Support.
+/// Local-first store for the whole garage. The cars you live with — owned or on a plan —
+/// plus their fuel logs. Persists to JSON in Application Support.
 @MainActor
 final class Garage: ObservableObject {
     @Published private(set) var cars: [Car] = []
     @Published private(set) var plans: [Plan] = []
-    @Published private(set) var rentals: [Rental] = []
     @Published private(set) var fuelLogs: [FuelLog] = []
     @Published private(set) var logEntries: [LogEntry] = []
     @Published private(set) var reminders: [Reminder] = []
@@ -25,13 +24,24 @@ final class Garage: ObservableObject {
     }
 
     // MARK: Derived
-    var isEmpty: Bool { cars.isEmpty && rentals.isEmpty }
-    var activeCar: Car? { cars.first { $0.id == activeCarID } ?? cars.first }
+    var isEmpty: Bool { cars.isEmpty }
+    /// The active car, never an archived one — falls back to the first live resident.
+    var activeCar: Car? {
+        if let id = activeCarID, let c = car(id), !c.isArchived { return c }
+        return residents.first
+    }
     func plan(for car: Car) -> Plan? { plans.first { $0.carIDs.contains(car.id) } }
 
-    /// One card per plan — the *current* car (lineage of prior cars lives in detail).
+    /// One card per plan — the *current* car (lineage of prior cars lives in detail). Archived
+    /// cars drop out of the shelf entirely; their plan goes quiet with them.
     var residents: [Car] {
-        plans.compactMap { plan in cars.first { $0.id == plan.currentCarID } }
+        plans.compactMap { plan in cars.first { $0.id == plan.currentCarID && !$0.isArchived } }
+    }
+
+    /// Shelved cars — the current car of any plan that's been archived. Surfaced only in the
+    /// Garage's "Archived" section, where they can be restored.
+    var archivedCars: [Car] {
+        plans.compactMap { plan in cars.first { $0.id == plan.currentCarID && $0.isArchived } }
     }
 
     /// The ordered cars that have occupied a plan (oldest → current).
@@ -49,11 +59,113 @@ final class Garage: ObservableObject {
 
     /// L/100km for a log, derived from the previous fill's odometer. nil if no prior fill.
     func efficiencyL100(for log: FuelLog) -> Double? {
-        let byOdo = fuelLogs.filter { $0.carID == log.carID }.sorted { $0.odometerKm < $1.odometerKm }
-        guard let idx = byOdo.firstIndex(of: log), idx > 0 else { return nil }
-        let km = log.odometerKm - byOdo[idx - 1].odometerKm
+        guard let myOdo = log.odometerKm else { return nil }
+        let byOdo = fuelLogs.filter { $0.carID == log.carID && $0.odometerKm != nil }
+            .sorted { ($0.odometerKm ?? 0) < ($1.odometerKm ?? 0) }
+        guard let idx = byOdo.firstIndex(of: log), idx > 0, let prev = byOdo[idx - 1].odometerKm else { return nil }
+        let km = myOdo - prev
         guard km > 0 else { return nil }
         return log.liters / Double(km) * 100
+    }
+
+    /// Efficiency (L/100km) for every fuel log of a car, computed in one pass (one sort)
+    /// instead of re-sorting all logs per row. Keyed by log id; a log with no prior reading is absent.
+    func efficiencies(for car: Car) -> [UUID: Double] {
+        let logs = fuelLogs(for: car).filter { $0.odometerKm != nil }
+            .sorted { ($0.odometerKm ?? 0) < ($1.odometerKm ?? 0) }
+        guard logs.count > 1 else { return [:] }
+        var map: [UUID: Double] = [:]
+        for i in 1..<logs.count {
+            guard let a = logs[i].odometerKm, let b = logs[i - 1].odometerKm else { continue }
+            let km = a - b
+            if km > 0 { map[logs[i].id] = logs[i].liters / Double(km) * 100 }
+        }
+        return map
+    }
+
+    /// Km driven in the current cap cycle (month or year, per the plan), derived live from
+    /// odometer history against the car's current odometer. nil if not derivable.
+    func kmThisCycle(for car: Car) -> Int? {
+        guard let current = car.odometerKm else { return nil }
+        let cycleStart = mileageCycle(for: car).start
+        var readings: [(Date, Int)] = []
+        if let initial = car.initialOdometerKm { readings.append((car.addedAt, initial)) }
+        readings += (car.odometerLog ?? []).map { ($0.date, $0.km) }
+        readings += fuelLogs(for: car).compactMap { l in l.odometerKm.map { (l.date, $0) } }
+        readings += entries(for: car).compactMap { e in e.odometerKm.map { (e.date, $0) } }
+        readings.sort { $0.0 < $1.0 }
+        // baseline = last reading before the cycle started; else the first reading within it
+        let baseline = readings.last(where: { $0.0 < cycleStart })?.1
+            ?? readings.first(where: { $0.0 >= cycleStart })?.1
+        guard let base = baseline else { return nil }
+        return max(0, current - base)
+    }
+
+    /// The current cap cycle window [start, end). Monthly, anchored to the plan's *start day* —
+    /// a subscription that began on the 6th resets on the 6th, not the calendar 1st (the day is
+    /// clamped on short months). Cars without a dated plan fall back to the calendar month.
+    func mileageCycle(for car: Car, asOf now: Date = Date()) -> (start: Date, end: Date) {
+        let cal = Calendar.current
+        guard let plan = plan(for: car), plan.kind != .owned else {
+            let s = cal.date(from: cal.dateComponents([.year, .month], from: now)) ?? now
+            return (s, cal.date(byAdding: .month, value: 1, to: s) ?? now)
+        }
+        let n = max(1, plan.capPeriod.months)              // 1 = monthly, 12 = yearly
+        let anchorDay = cal.component(.day, from: plan.startedAt)
+        let today = cal.startOfDay(for: now)
+        // Walk forward from the plan's start in N-month steps; the last boundary on/before today is
+        // the current cycle start. Anchored to the start day (clamped on short months).
+        var start = cal.startOfDay(for: plan.startedAt)
+        var steps = 0
+        while let next = Self.boundary(after: start, addingMonths: n, anchorDay: anchorDay, cal: cal),
+              next <= today, steps < 1200 {
+            start = next; steps += 1
+        }
+        let end = Self.boundary(after: start, addingMonths: n, anchorDay: anchorDay, cal: cal) ?? start
+        return (start, end)
+    }
+
+    private static func boundary(after date: Date, addingMonths n: Int, anchorDay: Int, cal: Calendar) -> Date? {
+        guard let base = cal.date(byAdding: .month, value: n, to: date) else { return nil }
+        return monthlyBoundary(day: anchorDay, inMonthOf: base, cal: cal)
+    }
+
+    /// The anchor day placed in `ref`'s month (clamped to that month's length), at start of day.
+    private static func monthlyBoundary(day: Int, inMonthOf ref: Date, cal: Calendar) -> Date {
+        var comps = cal.dateComponents([.year, .month], from: ref)
+        let base = cal.date(from: comps) ?? ref
+        let daysInMonth = cal.range(of: .day, in: .month, for: base)?.count ?? 28
+        comps.day = min(day, daysInMonth)
+        return cal.startOfDay(for: cal.date(from: comps) ?? base)
+    }
+
+    /// Whole days until the current cap cycle resets — for the gauge footnote.
+    func daysUntilMileageReset(for car: Car, asOf now: Date = Date()) -> Int {
+        let cal = Calendar.current
+        let end = mileageCycle(for: car, asOf: now).end
+        return max(0, cal.dateComponents([.day], from: cal.startOfDay(for: now), to: end).day ?? 0)
+    }
+
+    /// Days the mileage gauge stays quiet after you update the odometer (i.e. acknowledge it),
+    /// so it doesn't resurface the moment you've just dealt with it.
+    static let mileageQuietDays = 7
+
+    /// Mileage-cap gauges, derived live from any plan that carries a cap, so the gauge tracks
+    /// real driving (and follows a swap) instead of a frozen value. Hidden for a quiet window
+    /// right after you update the odometer.
+    var mileageCapReminders: [Reminder] {
+        plans.compactMap { plan in
+            guard plan.kind != .owned, let cap = plan.mileageCapPerMonth, cap > 0,
+                  let id = plan.currentCarID, let car = car(id), !car.isArchived else { return nil }
+            // Quiet window: if the odometer was just updated, don't resurface the gauge yet.
+            if let last = car.odometerLog?.last?.date,
+               Date().timeIntervalSince(last) < Double(Self.mileageQuietDays) * 86_400 { return nil }
+            var r = Reminder(carID: car.id, kind: .mileageCap, title: "Mileage this \(plan.capPeriod.noun)",
+                             detail: "\(car.displayName) · \(plan.provider ?? "plan")",
+                             monthlyUsedKm: kmThisCycle(for: car) ?? 0, monthlyCapKm: cap)
+            r.id = plan.id   // stable identity (sheet/list diffing) tied to the plan
+            return r
+        }
     }
 
     // MARK: Mutations
@@ -79,14 +191,19 @@ final class Garage: ObservableObject {
     /// cost/reminders/mileage carry over, the prior car retires into history.
     func swapCar(in plan: Plan, to newCar: Car) {
         guard let pIdx = plans.firstIndex(where: { $0.id == plan.id }) else { return }
+        let retiringCarID = plans[pIdx].carIDs.last   // capture BEFORE appending the new car
         cars.append(newCar)
         plans[pIdx].carIDs.append(newCar.id)
         activeCarID = newCar.id
-        save()
-    }
-
-    func addRental(_ rental: Rental) {
-        rentals.append(rental)
+        // Carry the plan's still-active, date-based reminders onto the new car so they aren't
+        // orphaned on the retired one (mileage-cap follows the plan automatically; mileage-based
+        // service targets are odometer-specific, so they retire with the old car).
+        if let retiringCarID {
+            for i in reminders.indices where reminders[i].carID == retiringCarID
+                && isActive(reminders[i]) && reminders[i].dueDate != nil {
+                reminders[i].carID = newCar.id
+            }
+        }
         save()
     }
 
@@ -94,6 +211,74 @@ final class Garage: ObservableObject {
         guard let i = cars.firstIndex(where: { $0.id == car.id }) else { return }
         cars[i] = car
         save()
+    }
+
+    /// Set a car's current odometer directly — the in-place correction behind the live
+    /// mileage-cap gauge (which derives this-month's km from the odometer).
+    func setOdometer(_ km: Int, for carID: UUID) {
+        guard let i = cars.firstIndex(where: { $0.id == carID }) else { return }
+        cars[i].odometerKm = km
+        // Record a dated reading so the monthly-mileage gauge has history to measure against —
+        // even for cars that are never fuel-logged. Collapse same-day edits into one reading.
+        let now = Date()
+        var log = cars[i].odometerLog ?? []
+        if let last = log.indices.last, Calendar.current.isDate(log[last].date, inSameDayAs: now) {
+            log[last].km = km
+        } else {
+            log.append(OdometerReading(date: now, km: km))
+        }
+        cars[i].odometerLog = log
+        save()
+    }
+
+    /// Shelve a car: keep it (and all its history) on file but out of the garage and every
+    /// tally, until it's restored. If it was the active car, move on to a live resident.
+    func archiveCar(_ car: Car) {
+        guard let i = cars.firstIndex(where: { $0.id == car.id }) else { return }
+        cars[i].archivedAt = Date()
+        if activeCarID == car.id { activeCarID = residents.first?.id }
+        save()
+    }
+
+    /// Bring a shelved car back into the garage.
+    func unarchiveCar(_ car: Car) {
+        guard let i = cars.firstIndex(where: { $0.id == car.id }) else { return }
+        cars[i].archivedAt = nil
+        save()
+    }
+
+    /// Remove a car and everything attached to it (logs, reminders, policies, documents),
+    /// drop it from its plan's lineage, and retire the plan if it has no cars left.
+    func deleteCar(_ car: Car) {
+        let id = car.id
+        cars.removeAll { $0.id == id }
+        fuelLogs.removeAll { $0.carID == id }
+        logEntries.removeAll { $0.carID == id }
+        reminders.removeAll { $0.carID == id }
+        policies.removeAll { $0.carID == id }
+        documents.removeAll { $0.carID == id }
+        for i in plans.indices { plans[i].carIDs.removeAll { $0 == id } }
+        plans.removeAll { $0.carIDs.isEmpty }
+        if activeCarID == id { activeCarID = cars.first?.id }
+        save()
+    }
+
+    /// Right-to-erasure: wipe everything from memory and delete the store file from disk.
+    func eraseAll() {
+        cars = []; plans = []; fuelLogs = []; logEntries = []
+        reminders = []; policies = []; documents = []
+        activeCarID = nil
+        if let url = fileURL { try? FileManager.default.removeItem(at: url) }
+    }
+
+    /// Data portability: a machine-readable JSON snapshot written to a temp file for sharing.
+    func exportJSON() -> URL? {
+        let state = State(cars: cars, plans: plans, fuelLogs: fuelLogs, logEntries: logEntries,
+                          reminders: reminders, policies: policies, documents: documents, activeCarID: activeCarID)
+        guard let data = try? JSONEncoder().encode(state) else { return nil }
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("koi-export.json")
+        try? data.write(to: url, options: .atomic)
+        return url
     }
 
     func setActiveCar(_ id: UUID) {
@@ -104,12 +289,6 @@ final class Garage: ObservableObject {
     func updatePlan(_ plan: Plan) {
         guard let i = plans.firstIndex(where: { $0.id == plan.id }) else { return }
         plans[i] = plan
-        save()
-    }
-
-    func markReturned(_ rental: Rental) {
-        guard let i = rentals.firstIndex(where: { $0.id == rental.id }) else { return }
-        rentals[i].returned = true
         save()
     }
 
@@ -127,23 +306,40 @@ final class Garage: ObservableObject {
         logEntries.filter { $0.carID == car.id }
     }
 
-    /// Everything spent on a car so far: purchase + fuel + expenses/service + plan cost to date.
+    /// Everything spent on a car so far. Owned → purchase price; on a plan → up-front
+    /// deposit + monthly × months billed (never a purchase price). Plus fuel + expenses/service.
     func totalSpent(on car: Car) -> Decimal {
-        var sum: Decimal = car.purchasePrice ?? 0
+        let p = plan(for: car)
+        let isOwned = (p?.kind ?? .owned) == .owned
+
+        var sum: Decimal = isOwned ? (car.purchasePrice ?? 0) : 0
+        if let p, !isOwned {
+            sum += p.initialPayment ?? 0
+            if let monthly = p.monthlyCost {
+                sum += monthly * Decimal(monthsBilled(for: p))
+            }
+        }
         for f in fuelLogs(for: car) { sum += f.amount }
         for e in entries(for: car) where e.kind != .note { sum += e.amount ?? 0 }
-        if let p = plan(for: car), p.kind != .owned, let monthly = p.monthlyCost {
-            let months = Calendar.current.dateComponents([.month], from: p.startedAt, to: Date()).month ?? 0
-            sum += monthly * Decimal(max(0, months))
-        }
         return sum
+    }
+
+    /// Months billed on a plan so far: elapsed whole months, clamped to the plan's end date,
+    /// plus the in-progress month while the plan is still active (most plans bill month 1 at signup).
+    private func monthsBilled(for plan: Plan) -> Int {
+        let now = Date()
+        let cappedEnd = plan.endsAt.map { min($0, now) } ?? now
+        var months = Calendar.current.dateComponents([.month], from: plan.startedAt, to: cappedEnd).month ?? 0
+        let stillActive = (plan.endsAt ?? .distantFuture) > now
+        if stillActive { months += 1 }
+        return max(0, months)
     }
 
     func addFuelLog(_ log: FuelLog) {
         fuelLogs.append(log)
         if let i = cars.firstIndex(where: { $0.id == log.carID }),
-           log.odometerKm > (cars[i].odometerKm ?? 0) {
-            cars[i].odometerKm = log.odometerKm
+           let odo = log.odometerKm, odo > (cars[i].odometerKm ?? 0) {
+            cars[i].odometerKm = odo
         }
         save()
     }
@@ -191,6 +387,18 @@ final class Garage: ObservableObject {
         save()
     }
 
+    /// Bring in a parsed MyCar export — append its cars (each with an owned plan) and their
+    /// fuel/service/expense/note history, then save once.
+    func importMyCar(_ result: MyCarImporter.Result) {
+        guard !result.isEmpty else { return }
+        cars.append(contentsOf: result.cars)
+        plans.append(contentsOf: result.plans)
+        fuelLogs.append(contentsOf: result.fuels)
+        logEntries.append(contentsOf: result.entries)
+        if activeCarID == nil { activeCarID = result.cars.first?.id }
+        save()
+    }
+
     /// Close the renewal loop: roll the policy forward a year, remember last year's premium,
     /// resolve the active insurance reminder, and schedule next year's.
     func renew(_ policy: InsurancePolicy) {
@@ -225,7 +433,9 @@ final class Garage: ObservableObject {
         return true
     }
 
-    var activeReminders: [Reminder] { reminders.filter { isActive($0) } }
+    var activeReminders: [Reminder] {
+        reminders.filter { isActive($0) && !(car($0.carID)?.isArchived ?? false) } + mileageCapReminders
+    }
 
     func urgency(_ r: Reminder) -> Urgency {
         if r.kind == .mileageCap, let used = r.monthlyUsedKm, let cap = r.monthlyCapKm, cap > 0 {
@@ -251,12 +461,15 @@ final class Garage: ObservableObject {
         }
         if let due = r.dueMileageKm, let odo = car(r.carID)?.odometerKm {
             let remaining = due - odo
-            return remaining < 0 ? "overdue" : "~\(roundedKm(remaining)) km"
+            if remaining < 0 { return "overdue" }
+            let rounded = ((remaining + 25) / 50) * 50
+            return rounded == 0 ? "under 50 km" : "~\(rounded.formatted()) km"
         }
         if let date = r.dueDate {
             let days = daysUntil(date)
             if days < 0 { return "overdue" }
             if days == 0 { return "today" }
+            if days == 1 { return "tomorrow" }
             if days <= comingUpDays { return "in \(days) days" }
             if days <= 90 { return "in \(days / 7) weeks" }
             return date.formatted(.dateTime.day().month(.abbreviated).year())
@@ -292,9 +505,6 @@ final class Garage: ObservableObject {
         return cal.dateComponents([.day], from: from, to: to).day ?? 0
     }
 
-    private func roundedKm(_ km: Int) -> String {
-        (((km + 25) / 50) * 50).formatted()
-    }
 
     /// A rough "how soon" score in days, so date and mileage items can be ordered together.
     private func soonness(_ r: Reminder) -> Double {
@@ -309,10 +519,9 @@ final class Garage: ObservableObject {
     }
 
     // MARK: Persistence
-    private struct State: Codable {
+    private struct State: Codable, Sendable {
         var cars: [Car]
         var plans: [Plan]
-        var rentals: [Rental]
         var fuelLogs: [FuelLog]?
         var logEntries: [LogEntry]?
         var reminders: [Reminder]?
@@ -328,12 +537,25 @@ final class Garage: ObservableObject {
     }
 
     private func load() {
-        guard let url = fileURL,
-              let data = try? Data(contentsOf: url),
-              let state = try? JSONDecoder().decode(State.self, from: data) else { return }
+        guard let url = fileURL else { return }
+        guard let data = try? Data(contentsOf: url) else { return }   // absent → legitimate first run
+        let state: State
+        do {
+            state = try JSONDecoder().decode(State.self, from: data)
+        } catch {
+            // Present but undecodable (corrupt / forward-incompatible): preserve it as a backup
+            // so the next save() doesn't overwrite recoverable data. Then start fresh.
+            let backup = url.deletingPathExtension().appendingPathExtension("corrupt.json")
+            try? FileManager.default.removeItem(at: backup)
+            try? FileManager.default.copyItem(at: url, to: backup)
+            // Was assertionFailure — but that traps in Debug, so any forward-incompatible field
+            // would crash the app on launch. Degrade gracefully: keep the backup, start fresh.
+            print("Garage decode failed (backed up to \(backup.lastPathComponent)): \(error)")
+            return
+        }
         cars = state.cars
-        plans = state.plans
-        rentals = state.rentals
+        // Lease merged into the single "Plan" kind — normalise any legacy lease plans on load.
+        plans = state.plans.map { var p = $0; if p.kind == .lease { p.kind = .subscription }; return p }
         fuelLogs = state.fuelLogs ?? []
         logEntries = state.logEntries ?? []
         reminders = state.reminders ?? []
@@ -342,13 +564,18 @@ final class Garage: ObservableObject {
         activeCarID = state.activeCarID
     }
 
+    private static let ioQueue = DispatchQueue(label: "com.gariasf.koi.garage-io", qos: .utility)
+
     private func save() {
         guard persists, let url = fileURL else { return }
-        let state = State(cars: cars, plans: plans, rentals: rentals, fuelLogs: fuelLogs,
+        // snapshot on the main actor, then encode + write off it (serial queue keeps writes ordered).
+        let state = State(cars: cars, plans: plans, fuelLogs: fuelLogs,
                           logEntries: logEntries, reminders: reminders, policies: policies,
                           documents: documents, activeCarID: activeCarID)
-        if let data = try? JSONEncoder().encode(state) {
-            try? data.write(to: url, options: .atomic)
+        Self.ioQueue.async {
+            guard let data = try? JSONEncoder().encode(state) else { return }
+            // encrypt at rest (plates, policy numbers, prices, photos) once the device is first unlocked
+            try? data.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
         }
     }
 
@@ -359,52 +586,56 @@ final class Garage: ObservableObject {
         return g
     }
 
+    /// Load a bundled demo car photo (dev seed only). CC0 imagery shipped under Resources/Seed.
+    private static func seedPhoto(_ name: String) -> Data? {
+        guard let url = Bundle.main.url(forResource: name, withExtension: "jpg") else { return nil }
+        return try? Data(contentsOf: url)
+    }
+
     func seed() {
         // Owned — Betsy, with two fuel logs (latest derives to 6.3 L/100km)
         var betsy = Car(make: "Volkswagen", model: "Golf")
         betsy.year = 2018; betsy.nickname = "Betsy"; betsy.plate = "4821 KPD"
         betsy.odometerKm = 142_300; betsy.accent = .slate
-        betsy.fuelType = .diesel; betsy.purchasePrice = 18_500
+        betsy.fuelType = .diesel; betsy.purchasePrice = 18_500; betsy.tankCapacityL = 55
+        betsy.photo = Self.seedPhoto("golf")
         addOwnedCar(betsy)
         addFuelLog(FuelLog(carID: betsy.id, date: Date().addingTimeInterval(-12 * 86_400),
                            amount: 57.20, liters: 44.0, odometerKm: 141_551, station: "Repsol"))
         addFuelLog(FuelLog(carID: betsy.id, date: Date().addingTimeInterval(-5 * 86_400),
                            amount: 61.40, liters: 47.2, odometerKm: 142_300, station: "Repsol"))
 
-        // Subscription — Mocean, Kona swapped to Tucson (same plan continues)
-        var kona = Car(make: "Hyundai", model: "Kona"); kona.accent = .sage
-        kona.addedAt = Date().addingTimeInterval(-270 * 86_400)
+        // Subscription — Mocean, Tucson swapped to a Kona 2025 (same plan continues)
+        var tucson = Car(make: "Hyundai", model: "Tucson"); tucson.accent = .sage
+        tucson.addedAt = Date().addingTimeInterval(-270 * 86_400)
         var sub = Plan(kind: .subscription)
         sub.provider = "Mocean"; sub.monthlyCost = 459; sub.mileageCapPerMonth = 1_500
+        sub.startedAt = Date().addingTimeInterval(-71 * 86_400)   // ~Apr 6 → cap cycle resets on the 6th
         sub.includesInsurance = true; sub.includesMaintenance = true; sub.includesRoadside = true
         sub.allowsSwap = true; sub.swapIntervalMonths = 6
-        let saved = addPlanCar(kona, plan: sub)
-        var tucson = Car(make: "Hyundai", model: "Tucson"); tucson.accent = .sage
-        tucson.odometerKm = 1_020; tucson.addedAt = Date().addingTimeInterval(-90 * 86_400)
-        tucson.fuelType = .hybrid
-        swapCar(in: saved, to: tucson)
-
-        // Guest — a returned rental
-        var fiat = Car(make: "Fiat", model: "500"); fiat.accent = .terracotta
-        addRental(Rental(company: "Europcar", car: fiat,
-                         pickup: Date().addingTimeInterval(-40 * 86_400),
-                         dropoff: Date().addingTimeInterval(-36 * 86_400),
-                         fuelPolicyFullToFull: true, excess: 1_200, cdwTaken: true, returned: true))
+        let saved = addPlanCar(tucson, plan: sub)
+        var kona = Car(make: "Hyundai", model: "Kona"); kona.year = 2025; kona.accent = .sage
+        kona.odometerKm = 1_900; kona.initialOdometerKm = 700; kona.addedAt = Date().addingTimeInterval(-90 * 86_400)
+        kona.fuelType = .hybrid
+        kona.photo = Self.seedPhoto("kona")
+        swapCar(in: saved, to: kona)
+        // Cap cycle resets on the 6th (sub start day). Initial odo 700 (acquisition, ~3 months ago)
+        // is the baseline before this cycle began; 1,900 now − 700 = 1,200 of 1,500 km (≈80% → coming
+        // up). The mid-cycle fill at 1,500 sits inside the window, so it isn't the baseline.
+        addFuelLog(FuelLog(carID: kona.id, date: Date().addingTimeInterval(-3 * 86_400),
+                           amount: 48.30, liters: 34.5, odometerKm: 1_500, station: "Cepsa"))
 
         // `-calm` suppresses the coming-up items, leaving the Glance all-clear (Direction A).
         let calm = ProcessInfo.processInfo.arguments.contains("-calm")
 
         // Reminders — two coming up (→ Glance Direction B), two on the horizon (neutral)
         if !calm {
-            addReminder(Reminder(carID: betsy.id, kind: .inspection, title: "ITV inspection",
-                                 detail: "\(betsy.displayName) · biennial check",
+            addReminder(Reminder(carID: betsy.id, kind: .inspection, title: "Inspection",
+                                 detail: "\(betsy.displayName) · every 2 years",
                                  dueDate: Date().addingTimeInterval(63 * 86_400)))
             addReminder(Reminder(carID: betsy.id, kind: .service, title: "Oil & filter service",
                                  detail: betsy.displayName,
                                  dueMileageKm: (betsy.odometerKm ?? 142_300) + 1_500))
-            addReminder(Reminder(carID: tucson.id, kind: .mileageCap, title: "Mileage this month",
-                                 detail: "\(tucson.displayName) · Mocean",
-                                 monthlyUsedKm: 1_020, monthlyCapKm: 1_500))
         }
 
         // Insurance — Betsy carries a Mapfre policy (auto-creates the renewal reminder, 16 days)
@@ -417,8 +648,13 @@ final class Garage: ObservableObject {
         addDocument(Document(carID: betsy.id, kind: .registration,
                              title: "Registration", subtitle: "Permiso de circulación"))
         addDocument(Document(carID: betsy.id, kind: .inspection,
-                             title: "ITV certificate", subtitle: "Valid to Aug 2024"))
+                             title: "Inspection certificate",
+                             subtitle: "Valid to " + Date().addingTimeInterval(540 * 86_400).formatted(.dateTime.month(.abbreviated).year())))
 
         activeCarID = betsy.id   // Glance shows the owned car + its fuel logs
+        // dev: `-active2` starts on the second resident (Tucson · hybrid) to check the fuel card switches
+        if ProcessInfo.processInfo.arguments.contains("-active2"), residents.count > 1 {
+            activeCarID = residents[1].id
+        }
     }
 }

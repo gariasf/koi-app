@@ -5,6 +5,13 @@ enum CarAccent: String, Codable, CaseIterable {
     case sage, slate, terracotta, ochre
 }
 
+/// A dated odometer reading. The trail that keeps the monthly-mileage gauge honest even for
+/// cars that are never fuel-logged (e.g. all-inclusive subscriptions).
+struct OdometerReading: Codable, Hashable {
+    var date: Date
+    var km: Int
+}
+
 /// A vehicle. The user thinks in cars; the system threads them onto a `Plan`.
 struct Car: Identifiable, Codable, Hashable {
     var id: UUID = UUID()
@@ -22,12 +29,18 @@ struct Car: Identifiable, Codable, Hashable {
     var purchaseYear: Int?       // when you got it (esp. second-hand)
     var powerHP: Int?            // DIN hp / CV
     var fiscalPowerCV: Double?   // potencia fiscal (CVF) — from the vehicle papers
-    var torqueNm: Int?
     var purchasePrice: Decimal?
     var soldPrice: Decimal?      // set when the car leaves the garage (sell flow, later)
+    var vin: String?             // chassis / vehicle identification number
+    var tankCapacityL: Double?   // fuel tank size (L) — powers "Fill to full" + a sanity cap when logging
     var addedAt: Date = Date()
+    var initialOdometerKm: Int?              // reading when you got the car — mileage-cap baseline + total since
+    var odometerLog: [OdometerReading]?      // dated manual readings (optional so pre-existing saves decode)
+    var archivedAt: Date?                    // set when shelved — hidden from the garage + not counted, but restorable
 
     var fuel: FuelType { fuelType ?? .petrol }
+    /// Shelved: kept on file (and restorable) but out of the active garage and every tally.
+    var isArchived: Bool { archivedAt != nil }
     /// Year you've had it from, for "owned since".
     var ownedSinceYear: Int? { purchaseYear ?? registrationYear ?? year }
 

@@ -5,8 +5,14 @@ import SwiftUI
 struct CarDetailView: View {
     @EnvironmentObject private var garage: Garage
     @Environment(\.dismiss) private var dismiss
-    let car: Car
+    private let referenceCar: Car
     @State private var activeSheet: CarSheet?
+
+    init(car: Car) { self.referenceCar = car }
+
+    /// Always read the live car from the store so edits (fuel type, odometer, name…) reflect
+    /// immediately, instead of showing the snapshot navigation handed us.
+    private var car: Car { garage.car(referenceCar.id) ?? referenceCar }
 
     private enum CarSheet: Int, Identifiable {
         case log, vault, edit, addReminder, swap
@@ -29,13 +35,12 @@ struct CarDetailView: View {
             }
             .padding(.horizontal, KoiSpace.gutter)
             .padding(.top, 8)
-            .padding(.bottom, 24)
+            .padding(.bottom, 32)
         }
+        .scrollBounceBehavior(.basedOnSize)
         .background(KoiColors.surface.ignoresSafeArea())
         .navigationTitle(car.displayName)
         .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(KoiColors.surface, for: .navigationBar)
-        .toolbarBackground(.visible, for: .navigationBar)
         .tint(KoiColors.sage)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -44,6 +49,10 @@ struct CarDetailView: View {
         }
         .sheet(item: $activeSheet) { which in
             sheetContent(which).presentationDragIndicator(.visible)
+        }
+        .onChange(of: garage.cars) { _, cars in
+            // car removed from its Edit screen → leave the now-stale detail
+            if !cars.contains(where: { $0.id == car.id }) { dismiss() }
         }
     }
 
@@ -127,14 +136,17 @@ struct CarDetailView: View {
     private var specsLine: String {
         var parts: [String] = []
         if let hp = car.powerHP { parts.append("\(hp) CV") }
-        if let cvf = car.fiscalPowerCV { parts.append("\(cvf.formatted()) CVF") }
-        if let nm = car.torqueNm { parts.append("\(nm) Nm") }
+        if let cvf = car.fiscalPowerCV { parts.append("\(cvf.formatted()) fiscal") }
         return parts.joined(separator: " · ")
     }
 
     private var ownershipLine: String {
         if let plan, plan.kind != .owned {
-            return "On a \(plan.kind.label.lowercased()) since \(plan.startedAt.formatted(.dateTime.month(.abbreviated).year()))"
+            let since = plan.startedAt.formatted(.dateTime.month(.abbreviated).year())
+            switch plan.kind {
+            case .finance: return "Financing since \(since)"   // "On a finance" is ungrammatical
+            default:       return "On a \(plan.kind.label.lowercased()) since \(since)"
+            }
         }
         if let year = car.ownedSinceYear { return "Owned since \(String(year))" }
         return "Owned"
@@ -173,8 +185,12 @@ struct CarDetailView: View {
             VStack(alignment: .leading, spacing: 6) {
                 Eyebrow(text: plan.kind.label)
                 Text(planLine(plan)).koiStyle(.monoMd).foregroundStyle(KoiColors.textPrimary)
+                if let dep = plan.initialPayment, dep > 0 {
+                    Text("\(KoiFormat.money(dep)) paid up front")
+                        .koiStyle(.meta).foregroundStyle(KoiColors.textSubdued)
+                }
                 if let end = plan.endsAt {
-                    Text("Until \(end.formatted(.dateTime.month(.abbreviated).year()))")
+                    Text("Ends \(end.formatted(.dateTime.month(.abbreviated).year()))")
                         .koiStyle(.meta).foregroundStyle(KoiColors.textSubdued)
                 }
                 if plan.allowsSwap {
@@ -191,7 +207,7 @@ struct CarDetailView: View {
         var parts: [String] = []
         if let p = plan.provider, !p.isEmpty { parts.append(p) }
         if let m = plan.monthlyCost { parts.append(KoiFormat.money(m) + "/mo") }
-        if let cap = plan.mileageCapPerMonth { parts.append("\(cap) km/mo cap") }
+        if let cap = plan.mileageCapPerMonth { parts.append("\(cap) \(plan.capPeriod.unit) cap") }
         return parts.joined(separator: " · ")
     }
 
@@ -208,8 +224,7 @@ struct CarDetailView: View {
         return VStack(alignment: .leading, spacing: 12) {
             Eyebrow(text: "Timeline")
             if items.isEmpty {
-                Text("No events yet. Log a fill-up to start the timeline.")
-                    .koiStyle(.body).foregroundStyle(KoiColors.textSubdued)
+                EmptyHint(icon: "clock", text: "Nothing logged yet. Fill-ups and services will show up here.")
             } else {
                 ForEach(Array(items.enumerated()), id: \.offset) { idx, item in
                     TimelineRow(title: item.title, subtitle: item.subtitle, isLast: idx == items.count - 1)
@@ -223,8 +238,9 @@ struct CarDetailView: View {
 
     private var timelineItems: [TLItem] {
         var items: [TLItem] = []
+        let effMap = garage.efficiencies(for: car)
         for log in garage.fuelLogs(for: car) {
-            items.append(TLItem(date: log.date, title: timelineTitle(log), subtitle: timelineSubtitle(log)))
+            items.append(TLItem(date: log.date, title: timelineTitle(log, efficiency: effMap[log.id]), subtitle: timelineSubtitle(log)))
         }
         for e in garage.entries(for: car) {
             items.append(TLItem(date: e.date, title: entryTitle(e), subtitle: entrySubtitle(e)))
@@ -245,9 +261,9 @@ struct CarDetailView: View {
         return items.sorted { $0.date > $1.date }
     }
 
-    private func timelineTitle(_ log: FuelLog) -> String {
+    private func timelineTitle(_ log: FuelLog, efficiency: Double?) -> String {
         let money = KoiFormat.money(log.amount, code: log.currency)
-        if let e = garage.efficiencyL100(for: log) {
+        if let e = efficiency {
             return "Fuel \(money) · \(KoiFormat.efficiency(e))"
         }
         return "Fuel \(money)"

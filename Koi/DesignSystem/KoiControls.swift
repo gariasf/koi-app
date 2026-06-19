@@ -11,16 +11,19 @@ struct KoiField: View {
     var hint: String? = nil
     var uppercased: Bool = false   // identifiers only (plate, policy no.) — locale-independent
     var grouped: Bool = false      // numeric input shown with the locale's thousands separator
+    var axis: Axis = .horizontal   // .vertical → grows into a multi-line field
+    var lineLimit: ClosedRange<Int> = 1...1
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(label).koiStyle(.eyebrow).foregroundStyle(KoiColors.textSubdued)
-            TextField(placeholder, text: fieldBinding)
+            TextField(placeholder, text: fieldBinding, axis: axis)
                 .koiStyle(mono ? .monoMd : .body)
                 .foregroundStyle(KoiColors.textPrimary)
                 .keyboardType(keyboard)
                 .textInputAutocapitalization(uppercased ? .characters : nil)
                 .autocorrectionDisabled(uppercased)
+                .lineLimit(lineLimit)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 11)
                 .background(KoiColors.fieldFill, in: RoundedRectangle(cornerRadius: KoiRadius.field, style: .continuous))
@@ -51,6 +54,98 @@ struct KoiField: View {
             )
         }
         return $text
+    }
+}
+
+/// The one calm icon button — Garage add, Glance settings, and similar.
+/// `.plain` is a bare transparent glyph (used on the Glance header, which scrolls over the flat
+/// surface — a glass chip there has nothing behind it to refract and just reads as an opaque disc).
+/// `.glass` is real Liquid Glass on iOS 26 (container+ring fallback) — used on the Garage header.
+struct KoiIconButton: View {
+    enum Style { case plain, glass }
+    let systemName: String
+    let accessibilityLabel: String
+    var style: Style = .plain
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: style == .glass ? 17 : 19, weight: .medium))
+                .foregroundStyle(KoiColors.textPrimary)
+                .frame(width: style == .glass ? 38 : 40, height: style == .glass ? 38 : 40)
+                .modifier(KoiIconButtonBackground(style: style))
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(accessibilityLabel)
+    }
+}
+
+private struct KoiIconButtonBackground: ViewModifier {
+    let style: KoiIconButton.Style
+    @ViewBuilder func body(content: Content) -> some View {
+        switch style {
+        case .plain:
+            content
+        case .glass:
+            if #available(iOS 26.0, *) {
+                content.glassEffect(.regular.interactive(), in: Circle())
+            } else {
+                content
+                    .background(KoiColors.container, in: Circle())
+                    .overlay(Circle().strokeBorder(KoiColors.ring, lineWidth: 1))
+            }
+        }
+    }
+}
+
+/// Inline text action (tertiary). accent = sage "do" link · muted = secondary/dismiss ·
+/// destructive = red. The named alternative to ad-hoc `.plain` text buttons.
+struct KoiTextButton: View {
+    enum Role { case accent, muted, destructive }
+    let title: String
+    var systemIcon: String? = nil
+    var role: Role = .accent
+    let action: () -> Void
+
+    private var tint: Color {
+        switch role {
+        case .accent:      return KoiColors.sageText
+        case .muted:       return KoiColors.textSecondary
+        case .destructive: return KoiColors.red
+        }
+    }
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                if let systemIcon { Image(systemName: systemIcon).font(.system(size: 13, weight: .semibold)) }
+                Text(title).koiStyle(.body)
+            }
+            .foregroundStyle(tint)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+/// A calm "nothing here yet" line — one consistent treatment for empty lists across the app.
+struct EmptyHint: View {
+    let icon: String
+    let text: String
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: icon)
+                .font(.system(size: 15, weight: .regular))
+                .foregroundStyle(KoiColors.textSubdued)
+            Text(text).koiStyle(.meta).foregroundStyle(KoiColors.textSubdued)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 4)
     }
 }
 

@@ -26,7 +26,7 @@ struct AddSwapCarView: View {
                 }
                 .padding(.horizontal, KoiSpace.gutter).padding(.top, 18).padding(.bottom, 12)
             }
-            KoiPrimaryButton(title: "Swap car", enabled: canSave) { save() }
+            KoiPrimaryButton(title: "Confirm swap", enabled: canSave) { save() }
                 .padding(.horizontal, KoiSpace.gutter).padding(.top, 10).padding(.bottom, 12)
         }
         .background(KoiColors.surface.ignoresSafeArea())
@@ -36,7 +36,7 @@ struct AddSwapCarView: View {
     private var explainer: some View {
         HStack(spacing: 12) {
             IconTile(systemName: "arrow.triangle.2.circlepath", tint: .sage)
-            Text("The plan continues — cost, reminders and history carry over. \(currentCar.displayName) retires into the lineage.")
+            Text("Your plan keeps going. Cost, reminders and history all carry over, and \(currentCar.displayName) moves into your history.")
                 .koiStyle(.meta).foregroundStyle(KoiColors.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -57,7 +57,7 @@ struct AddSwapCarView: View {
         var parts: [String] = []
         if let p = plan.provider, !p.isEmpty { parts.append(p) }
         if let m = plan.monthlyCost { parts.append(KoiFormat.money(m) + "/mo") }
-        if let cap = plan.mileageCapPerMonth { parts.append("\(cap) km/mo") }
+        if let cap = plan.mileageCapPerMonth { parts.append("\(cap) \(plan.capPeriod.unit) cap") }
         return parts.joined(separator: " · ")
     }
 

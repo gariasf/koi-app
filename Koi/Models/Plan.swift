@@ -13,7 +13,7 @@ enum PlanKind: String, Codable, CaseIterable {
         case .owned:        return "Owned"
         case .lease:        return "Lease"
         case .finance:      return "Finance"
-        case .subscription: return "Subscription"
+        case .subscription: return "Plan"
         }
     }
 }
@@ -23,7 +23,9 @@ struct Plan: Identifiable, Codable, Hashable {
     var kind: PlanKind
     var provider: String?
     var monthlyCost: Decimal?
-    var mileageCapPerMonth: Int?
+    var initialPayment: Decimal?   // deposit / down-payment / entrada paid up front (not a purchase)
+    var mileageCapPerMonth: Int?       // the cap amount, for the interval in `mileageCapPeriod`
+    var mileageCapPeriod: CapPeriod?   // how often the cap resets (defaults to monthly)
     var startedAt: Date = Date()
     var endsAt: Date?
     var includesInsurance: Bool = false
@@ -36,4 +38,15 @@ struct Plan: Identifiable, Codable, Hashable {
     var carIDs: [UUID] = []
 
     var currentCarID: UUID? { carIDs.last }
+    var capPeriod: CapPeriod { mileageCapPeriod ?? .month }
+}
+
+/// How often a mileage cap resets. A monthly plan resets every month; a lease-style cap can be yearly.
+enum CapPeriod: String, Codable, CaseIterable, Identifiable {
+    case month, year
+    var id: String { rawValue }
+    var months: Int { self == .year ? 12 : 1 }
+    var noun: String { self == .year ? "year" : "month" }   // "Mileage this month" / "this year"
+    var unit: String { self == .year ? "km/yr" : "km/mo" }
+    var label: String { self == .year ? "Yearly" : "Monthly" }
 }
