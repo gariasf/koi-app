@@ -80,6 +80,10 @@ struct SettingsView: View {
                 }
                 .buttonStyle(.plain)
                 Rectangle().fill(KoiColors.hairline).frame(height: 1).padding(.horizontal, 14)
+                Link(destination: URL(string: "mailto:hello@gariasf.com")!) {
+                    actionRow(icon: "envelope", title: "Contact us", tint: KoiColors.textPrimary)
+                }
+                Rectangle().fill(KoiColors.hairline).frame(height: 1).padding(.horizontal, 14)
                 Button { showPrivacy = true } label: {
                     actionRow(icon: "hand.raised", title: "Privacy policy", tint: KoiColors.textPrimary)
                 }

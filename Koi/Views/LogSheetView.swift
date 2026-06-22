@@ -11,7 +11,7 @@ struct LogSheetView: View {
 
     init(car: Car) { _car = State(initialValue: car) }
 
-    enum LogType: String, CaseIterable { case fuel = "Fuel", expense = "Expense", service = "Service", note = "Note" }
+    enum LogType: String, CaseIterable { case fuel = "Fuel", odometer = "Odometer", expense = "Expense", service = "Service", note = "Note" }
     enum Field { case amount, perLiter, liters, odometer }
 
     @State private var type: LogType = {
@@ -231,13 +231,19 @@ struct LogSheetView: View {
     // MARK: Expense / Service / Note (forms)
     private var otherBody: some View {
         VStack(alignment: .leading, spacing: 16) {
-            if type != .note {
-                KoiField(label: "Amount", placeholder: "€0", text: $amount, mono: true, keyboard: .decimalPad)
+            if type == .odometer {
+                KoiField(label: "Odometer (km)", placeholder: "142,300", text: $odometer, mono: true, keyboard: .numberPad, grouped: true)
+                Text("Updates the car’s current reading — and the monthly mileage gauge.")
+                    .koiStyle(.meta).foregroundStyle(KoiColors.textFaint)
+            } else {
+                if type != .note {
+                    KoiField(label: "Amount", placeholder: "€0", text: $amount, mono: true, keyboard: .decimalPad)
+                }
+                if type == .service {
+                    KoiField(label: "Odometer", placeholder: "142,300", text: $odometer, mono: true, keyboard: .numberPad, grouped: true)
+                }
+                noteField
             }
-            if type == .service {
-                KoiField(label: "Odometer", placeholder: "142,300", text: $odometer, mono: true, keyboard: .numberPad, grouped: true)
-            }
-            noteField
             Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -336,19 +342,21 @@ struct LogSheetView: View {
     // MARK: logic
     private var saveTitle: String {
         switch type {
-        case .fuel:    return "Save fill-up"
-        case .expense: return "Save expense"
-        case .service: return "Save service"
-        case .note:    return "Save note"
+        case .fuel:     return "Save fill-up"
+        case .odometer: return "Save odometer"
+        case .expense:  return "Save expense"
+        case .service:  return "Save service"
+        case .note:     return "Save note"
         }
     }
 
     private var canSave: Bool {
         switch type {
-        case .fuel:    let r = resolved; return r.total > 0 || r.liters > 0
-        case .expense: return (KoiFormat.decimal(amount) ?? 0) > 0
-        case .service: return (KoiFormat.decimal(amount) ?? 0) > 0 || !note.trimmingCharacters(in: .whitespaces).isEmpty
-        case .note:    return !note.trimmingCharacters(in: .whitespaces).isEmpty
+        case .fuel:     let r = resolved; return r.total > 0 || r.liters > 0
+        case .odometer: return (Int(odometer.filter(\.isNumber)) ?? 0) > 0
+        case .expense:  return (KoiFormat.decimal(amount) ?? 0) > 0
+        case .service:  return (KoiFormat.decimal(amount) ?? 0) > 0 || !note.trimmingCharacters(in: .whitespaces).isEmpty
+        case .note:     return !note.trimmingCharacters(in: .whitespaces).isEmpty
         }
     }
 
@@ -418,6 +426,10 @@ struct LogSheetView: View {
                                       liters: r.liters,
                                       odometerKm: Int(odometer.filter(\.isNumber)),
                                       station: nil))
+        case .odometer:
+            if let km = Int(odometer.filter(\.isNumber)), km > 0 {
+                garage.setOdometer(km, for: car.id)
+            }
         case .expense, .service, .note:
             let kind: LogKind = type == .expense ? .expense : (type == .service ? .service : .note)
             garage.addLogEntry(LogEntry(carID: car.id, kind: kind,
