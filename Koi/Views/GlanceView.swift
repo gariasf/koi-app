@@ -110,10 +110,10 @@ struct GlanceView: View {
             }
         }
         .animation(.easeInOut(duration: 0.3), value: garage.isAllClear)
-        .task { await fuel.refresh() }
+        .task { if fuel.available { await fuel.refresh() } }
         .onChange(of: location.provinceName) { _, name in
-            // a fresh fix tells us the province — let the fuel feed follow the user
-            if let name, let p = Province.match(name), p.id != fuel.provinceID {
+            // a fresh fix tells us the province — let the fuel feed follow the user (Spain only)
+            if fuel.available, let name, let p = Province.match(name), p.id != fuel.provinceID {
                 fuel.setProvince(p.id)
                 Task { await fuel.refresh() }
             }
@@ -340,7 +340,7 @@ struct GlanceView: View {
     // Undecided → ask for location; located → the closest station (tap = directions);
     // denied / no fix → region price as info only (no directions).
     @ViewBuilder private var fuelCard: some View {
-        if let product = garage.activeCar?.fuel.nearbyProduct {
+        if fuel.available, let product = garage.activeCar?.fuel.nearbyProduct {
             if location.status == .notDetermined {
                 Button { location.requestOrRefresh() } label: {
                     GlanceCard(eyebrow: product.nearbyEyebrow, icon: "fuelpump.fill", tint: .sage,

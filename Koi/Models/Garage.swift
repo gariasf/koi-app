@@ -146,6 +146,69 @@ final class Garage: ObservableObject {
         return max(0, cal.dateComponents([.day], from: cal.startOfDay(for: now), to: end).day ?? 0)
     }
 
+    /// One cap cycle, summarised for the monthly mileage history — computed live, never stored.
+    struct MileageCycleSummary: Identifiable {
+        let start: Date
+        let end: Date
+        let used: Int
+        let cap: Int
+        let isCurrent: Bool
+        var id: Date { start }
+    }
+
+    /// All dated odometer readings for a car (acquisition baseline + manual log + fuel/service
+    /// readings), oldest first — the shared spine behind both the live gauge and the history.
+    private func odometerReadings(for car: Car) -> [(date: Date, km: Int)] {
+        var readings: [(Date, Int)] = []
+        if let initial = car.initialOdometerKm { readings.append((car.addedAt, initial)) }
+        readings += (car.odometerLog ?? []).map { ($0.date, $0.km) }
+        readings += fuelLogs(for: car).compactMap { l in l.odometerKm.map { (l.date, $0) } }
+        readings += entries(for: car).compactMap { e in e.odometerKm.map { (e.date, $0) } }
+        return readings.sorted { $0.0 < $1.0 }.map { (date: $0.0, km: $0.1) }
+    }
+
+    /// Odometer value effective at `date` = the last reading on or before it. nil if none precede.
+    private func odometer(at date: Date, in readings: [(date: Date, km: Int)]) -> Int? {
+        readings.last(where: { $0.date <= date })?.km
+    }
+
+    /// Recent cap cycles, newest first — for the monthly mileage history. Each past cycle's km is
+    /// the odometer delta across its window; the current cycle reuses the live gauge value so the
+    /// "this month" row matches it exactly. Cycles with no reading bounding them are skipped — we
+    /// don't invent distances when the odometer wasn't recorded.
+    func mileageHistory(for car: Car, maxCycles: Int = 6) -> [MileageCycleSummary] {
+        guard let plan = plan(for: car), plan.kind != .owned,
+              let cap = plan.mileageCapPerMonth, cap > 0 else { return [] }
+        let readings = odometerReadings(for: car)
+        guard let firstReading = readings.first else { return [] }
+        let cal = Calendar.current
+        let n = max(1, plan.capPeriod.months)
+        let anchorDay = cal.component(.day, from: plan.startedAt)
+        let earliest = max(cal.startOfDay(for: plan.startedAt), firstReading.date)
+
+        var summaries: [MileageCycleSummary] = []
+        let cycle = mileageCycle(for: car)
+        var start = cycle.start
+        var end = cycle.end
+
+        for i in 0..<maxCycles {
+            if i == 0 {
+                // current cycle — mirror the live gauge so the rows agree
+                if let used = kmThisCycle(for: car) {
+                    summaries.append(MileageCycleSummary(start: start, end: end, used: used, cap: cap, isCurrent: true))
+                }
+            } else if let s = odometer(at: start, in: readings),
+                      let e = odometer(at: end, in: readings), e >= s {
+                summaries.append(MileageCycleSummary(start: start, end: end, used: e - s, cap: cap, isCurrent: false))
+            }
+            if start <= earliest { break }
+            guard let base = cal.date(byAdding: .month, value: -n, to: start) else { break }
+            end = start
+            start = Self.monthlyBoundary(day: anchorDay, inMonthOf: base, cal: cal)
+        }
+        return summaries
+    }
+
     /// Days the mileage gauge stays quiet after you update the odometer (i.e. acknowledge it),
     /// so it doesn't resurface the moment you've just dealt with it.
     static let mileageQuietDays = 7

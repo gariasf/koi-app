@@ -17,7 +17,7 @@ struct SettingsView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     appearanceSection
-                    regionSection
+                    if fuel.available { regionSection }
                     dataSection
                     footer
                 }
@@ -69,7 +69,9 @@ struct SettingsView: View {
     private var dataSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Eyebrow(text: "Your data")
-            Text("Koi keeps your cars, plans, costs, photos, reminders and any insurance details on this device. The only thing it sends is your chosen region, so it can fetch local fuel prices from the Spanish government feed. No account, no personal data.")
+            Text(fuel.available
+                 ? "Koi keeps your cars, plans, costs, photos, reminders and any insurance details on this device. The only thing it sends is your chosen region, so it can fetch local fuel prices from the Spanish government feed. No account, no personal data."
+                 : "Koi keeps your cars, plans, costs, photos, reminders and any insurance details on this device. Nothing leaves your phone — no account, no servers, no personal data.")
                 .koiStyle(.meta).foregroundStyle(KoiColors.textSubdued)
                 .fixedSize(horizontal: false, vertical: true)
             VStack(spacing: 0) {

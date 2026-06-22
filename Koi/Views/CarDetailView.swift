@@ -15,7 +15,7 @@ struct CarDetailView: View {
     private var car: Car { garage.car(referenceCar.id) ?? referenceCar }
 
     private enum CarSheet: Int, Identifiable {
-        case log, vault, edit, addReminder, swap
+        case log, vault, edit, addReminder, swap, mileageHistory
         var id: Int { rawValue }
     }
 
@@ -62,6 +62,7 @@ struct CarDetailView: View {
         case .vault:       InsuranceVaultView(car: car).environmentObject(garage)
         case .edit:        EditCarView(car: car).environmentObject(garage)
         case .addReminder: AddReminderView(car: car).environmentObject(garage)
+        case .mileageHistory: MileageHistoryView(car: car).environmentObject(garage)
         case .swap:
             if let plan {
                 NavigationStack {
@@ -196,6 +197,17 @@ struct CarDetailView: View {
                 if plan.allowsSwap {
                     Text(swapText(plan))
                         .koiStyle(.meta).foregroundStyle(KoiColors.textSubdued)
+                }
+                if let cap = plan.mileageCapPerMonth, cap > 0 {
+                    Button { activeSheet = .mileageHistory } label: {
+                        HStack(spacing: 4) {
+                            Text("Mileage history").koiStyle(.meta).foregroundStyle(KoiColors.sageText)
+                            Image(systemName: "chevron.right").font(.system(size: 10, weight: .semibold))
+                                .foregroundStyle(KoiColors.sageText)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.top, 4)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)

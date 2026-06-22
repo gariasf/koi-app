@@ -15,6 +15,11 @@ final class FuelPriceStore: ObservableObject {
 
     var provinceName: String { Province.name(for: provinceID) }
 
+    /// Live fuel prices come from the Spanish government feed (minetur), so the fuel cards and the
+    /// region picker only apply in Spain. Gated on the device region — elsewhere Koi shows no
+    /// prices and hides region selection, rather than silently defaulting to Madrid.
+    var available: Bool { Locale.current.region?.identifier == "ES" }
+
     private let service = FuelPriceService()
     private let persists: Bool
 
