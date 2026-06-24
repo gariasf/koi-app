@@ -272,9 +272,13 @@ final class Garage: ObservableObject {
             // Quiet window: if the odometer was just updated, don't resurface the gauge yet.
             if let last = car.odometerLog?.last?.date,
                Date().timeIntervalSince(last) < Double(Self.mileageQuietDays) * 86_400 { return nil }
+            // When the plan pools unused km, the gauge's budget is cap + carry-over — carry that
+            // pooled figure so urgency/countdown/sort agree with the detail screen.
+            let pool = mileagePool(for: car)
             var r = Reminder(carID: car.id, kind: .mileageCap, title: "Mileage this \(plan.capPeriod.noun)",
                              detail: "\(car.displayName) · \(plan.provider ?? "plan")",
-                             monthlyUsedKm: kmThisCycle(for: car) ?? 0, monthlyCapKm: cap)
+                             monthlyUsedKm: pool?.usedThisCycle ?? (kmThisCycle(for: car) ?? 0),
+                             monthlyCapKm: pool?.available ?? cap)
             r.id = plan.id   // stable identity (sheet/list diffing) tied to the plan
             return r
         }
@@ -550,9 +554,9 @@ final class Garage: ObservableObject {
     }
 
     func urgency(_ r: Reminder) -> Urgency {
-        if r.kind == .mileageCap, let used = r.monthlyUsedKm, let cap = r.monthlyCapKm, cap > 0 {
-            if used > cap { return .overdue }
-            return Double(used) / Double(cap) >= 0.8 ? .comingUp : .neutral
+        if r.kind == .mileageCap, let used = r.monthlyUsedKm, let cap = r.monthlyCapKm {
+            if used > cap { return .overdue }   // cap here is the pooled budget; ≤0 ⇒ overdrawn ⇒ overdue
+            return cap > 0 && Double(used) / Double(cap) >= 0.8 ? .comingUp : .neutral
         }
         if let due = r.dueMileageKm, let odo = car(r.carID)?.odometerKm {
             let remaining = due - odo

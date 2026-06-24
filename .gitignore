@@ -1,6 +1,7 @@
 # Xcode / Swift
 DerivedData/
 build/
+build_device/
 # Generated from project.yml by `xcodegen generate`
 *.xcodeproj
 *.xcworkspace
