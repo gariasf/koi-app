@@ -26,6 +26,7 @@ struct Plan: Identifiable, Codable, Hashable {
     var initialPayment: Decimal?   // deposit / down-payment / entrada paid up front (not a purchase)
     var mileageCapPerMonth: Int?       // the cap amount, for the interval in `mileageCapPeriod`
     var mileageCapPeriod: CapPeriod?   // how often the cap resets (defaults to monthly)
+    var mileagePools: Bool?            // unused km roll forward to end of term (odo read at return)
     var startedAt: Date = Date()
     var endsAt: Date?
     var includesInsurance: Bool = false

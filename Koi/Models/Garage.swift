@@ -209,6 +209,55 @@ final class Garage: ObservableObject {
         return summaries
     }
 
+    /// A pooling plan's cumulative budget, surfaced on the gauge. `available = cap + carryOver`.
+    struct MileagePool {
+        let cap: Int          // the plan's base allowance per cycle
+        let carryOver: Int    // surplus (+) or deficit (−) banked from completed cycles
+        let available: Int    // cap + carryOver — the real budget this cycle
+        let usedThisCycle: Int
+        let cyclesPooled: Int // how many completed cycles fed the carry-over
+    }
+
+    /// Cumulative mileage budget for a plan that lets unused km roll forward (the lessor reads the
+    /// odometer once, at return). Carry-over accrues per completed cycle from the first cycle
+    /// boundary on or after the first tracked reading — we never invent distance for months before
+    /// tracking began, so it stays honest when you start Koi mid-subscription. nil when the plan
+    /// doesn't pool.
+    func mileagePool(for car: Car) -> MileagePool? {
+        guard let plan = plan(for: car), plan.kind != .owned, plan.mileagePools == true,
+              let cap = plan.mileageCapPerMonth, cap > 0 else { return nil }
+        let readings = odometerReadings(for: car)
+        guard let first = readings.first else { return nil }
+        let cal = Calendar.current
+        let n = max(1, plan.capPeriod.months)
+        let anchorDay = cal.component(.day, from: plan.startedAt)
+        let cStart = mileageCycle(for: car).start
+        let baseline = max(cal.startOfDay(for: plan.startedAt), first.date)
+        let used = kmThisCycle(for: car) ?? 0
+
+        // First cycle boundary on or after the baseline — the pool clock starts at a clean edge.
+        var poolStart = cal.startOfDay(for: plan.startedAt)
+        var steps = 0
+        while poolStart < baseline, steps < 1200,
+              let next = Self.boundary(after: poolStart, addingMonths: n, anchorDay: anchorDay, cal: cal) {
+            poolStart = next; steps += 1
+        }
+        if poolStart >= cStart { return MileagePool(cap: cap, carryOver: 0, available: cap, usedThisCycle: used, cyclesPooled: 0) }
+
+        guard let baseOdo = odometer(at: poolStart, in: readings) else { return nil }
+        let odoAtCStart = odometer(at: cStart, in: readings) ?? car.odometerKm
+        guard let odoNow = odoAtCStart else { return nil }
+
+        var k = 0; var t = poolStart; steps = 0
+        while t < cStart, steps < 1200,
+              let next = Self.boundary(after: t, addingMonths: n, anchorDay: anchorDay, cal: cal) {
+            t = next; k += 1; steps += 1
+        }
+
+        let carryOver = cap * k - max(0, odoNow - baseOdo)
+        return MileagePool(cap: cap, carryOver: carryOver, available: cap + carryOver, usedThisCycle: used, cyclesPooled: k)
+    }
+
     /// Days the mileage gauge stays quiet after you update the odometer (i.e. acknowledge it),
     /// so it doesn't resurface the moment you've just dealt with it.
     static let mileageQuietDays = 7

@@ -8,6 +8,7 @@ struct PlanFormData {
     var monthly = ""
     var initialPayment = ""
     var mileageCap = ""
+    var poolsMileage = false
     var startDate = Date()
     var hasEnd = false
     var endDate = Date().addingTimeInterval(365 * 86_400)
@@ -26,6 +27,7 @@ struct PlanFormData {
         monthly = plan.monthlyCost.map { NSDecimalNumber(decimal: $0).stringValue } ?? ""
         initialPayment = plan.initialPayment.map { NSDecimalNumber(decimal: $0).stringValue } ?? ""
         mileageCap = plan.mileageCapPerMonth.map(String.init) ?? ""
+        poolsMileage = plan.mileagePools ?? false
         capPeriod = plan.capPeriod
         startDate = plan.startedAt
         if let e = plan.endsAt { hasEnd = true; endDate = e }
@@ -55,6 +57,7 @@ struct PlanFormData {
         plan.initialPayment = KoiFormat.decimal(initialPayment)
         plan.mileageCapPerMonth = Int(mileageCap.filter(\.isNumber))
         plan.mileageCapPeriod = capPeriod
+        plan.mileagePools = (Int(mileageCap.filter(\.isNumber)) ?? 0) > 0 ? poolsMileage : nil
         plan.startedAt = startDate
         plan.endsAt = hasEnd ? endDate : nil
         plan.includesInsurance = includesInsurance
@@ -140,6 +143,18 @@ struct PlanFieldsSection: View {
                 ForEach(CapPeriod.allCases) { Text($0.label).tag($0) }
             }
             .pickerStyle(.segmented)
+            if (Int(data.mileageCap.filter(\.isNumber)) ?? 0) > 0 {
+                VStack(spacing: 0) {
+                    KoiToggleRow(title: "Unused km roll over",
+                                 subtitle: data.poolsMileage ? "Banks under-driven \(data.capPeriod.noun)s" : "Strict \(data.capPeriod.noun)ly cap",
+                                 isOn: $data.poolsMileage).padding(14)
+                }
+                .koiCard(padding: 0)
+                if data.poolsMileage {
+                    Text("For contracts that only read the odometer at the end. The gauge shows your real allowance, including what you didn't use.")
+                        .koiStyle(.meta).foregroundStyle(KoiColors.textSubdued)
+                }
+            }
         }
     }
 

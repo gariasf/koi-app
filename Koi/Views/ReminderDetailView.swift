@@ -39,8 +39,18 @@ struct ReminderDetailView: View {
     }
 
     // MARK: live mileage-cap gauge
+    private var pool: Garage.MileagePool? { car.flatMap { garage.mileagePool(for: $0) } }
+    private var noun: String { car.flatMap { garage.plan(for: $0)?.capPeriod.noun } ?? "month" }
     private var used: Int { car.flatMap { garage.kmThisCycle(for: $0) } ?? reminder.monthlyUsedKm ?? 0 }
-    private var cap: Int { reminder.monthlyCapKm ?? 0 }
+    // When the plan pools unused km, the real budget this cycle is cap + carry-over.
+    private var cap: Int { pool?.available ?? reminder.monthlyCapKm ?? 0 }
+    private var breakdown: String? {
+        guard let p = pool else { return nil }
+        let base = "\(p.cap.formatted()) this \(noun)"
+        if p.carryOver > 0 { return "\(base) · +\(p.carryOver.formatted()) carried over" }
+        if p.carryOver < 0 { return "\(base) · −\((-p.carryOver).formatted()) overdrawn" }
+        return base
+    }
     private var fraction: Double { cap > 0 ? min(1, Double(used) / Double(cap)) : 0 }
     private var gaugeColor: Color {
         if used > cap { return KoiColors.red }
@@ -54,8 +64,15 @@ struct ReminderDetailView: View {
                 .koiStyle(.glanceLine).foregroundStyle(KoiColors.textPrimary)
                 .multilineTextAlignment(.center)
 
-            Text("\(used.formatted()) / \(cap.formatted()) km")
-                .koiStyle(.monoMd).foregroundStyle(KoiColors.textPrimary)
+            VStack(spacing: 4) {
+                Text("\(used.formatted()) / \(cap.formatted()) km")
+                    .koiStyle(.monoMd).foregroundStyle(KoiColors.textPrimary)
+                if let breakdown {
+                    Text(breakdown)
+                        .koiStyle(.meta).foregroundStyle(KoiColors.textSubdued)
+                        .multilineTextAlignment(.center)
+                }
+            }
             gaugeBar
             Text(gaugeFootnote)
                 .koiStyle(.meta).foregroundStyle(KoiColors.textSubdued)
