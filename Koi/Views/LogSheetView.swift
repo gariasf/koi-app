@@ -328,12 +328,14 @@ struct LogSheetView: View {
         switch field {
         case .perLiter:
             let u = "€/L"
-            if field != focus, field == derivedField, resolved.perLiter > 0 { return (pricePerLiterString(resolved.perLiter), u) }
+            // Show the computed value whenever this is the derived field and untyped — even if focused,
+            // so the answer is never hidden behind an empty focused chip.
+            if field == derivedField, perLiter.isEmpty, resolved.perLiter > 0 { return (pricePerLiterString(resolved.perLiter), u) }
             if field == focus { return (perLiter, u) }
             return (perLiter.isEmpty ? "—" : perLiter, u)
         case .liters:
             let u = "L"
-            if field != focus, field == derivedField, resolved.liters > 0 { return (litersValue(resolved.liters), u) }
+            if field == derivedField, liters.isEmpty, resolved.liters > 0 { return (litersValue(resolved.liters), u) }
             if field == focus { return (liters, u) }
             return (liters.isEmpty ? "—" : liters, u)
         case .odometer:
@@ -397,14 +399,15 @@ struct LogSheetView: View {
         Haptics.tap()
         perLiter = pricePerLiterString(mp)
         touch(.perLiter, perLiter)
-        focus = liters.isEmpty ? .liters : .amount
+        // Never land on the derived field — a focused-but-empty chip hides its computed value.
+        focus = derivedField == .liters ? .amount : (liters.isEmpty ? .liters : .amount)
     }
 
     private func fillToFull(_ tank: Double) {
         Haptics.tap()
         liters = litersValue(tank)
         touch(.liters, liters)
-        focus = perLiter.isEmpty ? .perLiter : .amount
+        focus = derivedField == .perLiter ? .amount : (perLiter.isEmpty ? .perLiter : .amount)
     }
 
     /// Record (or clear) a triangle field in the edit order — newest goes last.
