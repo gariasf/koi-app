@@ -75,13 +75,13 @@ struct RootTabView: View {
             Tab("Glance", systemImage: "smallcircle.filled.circle", value: KoiTab.glance) {
                 GlanceView()
             }
-            Tab("Story", systemImage: "clock.arrow.circlepath", value: KoiTab.timeline) {
+            Tab("Story", image: "ph-story", value: KoiTab.timeline) {
                 TimelineView()
             }
-            Tab("Garage", systemImage: "car.2.fill", value: KoiTab.garage) {
+            Tab("Garage", image: "ph-garage", value: KoiTab.garage) {
                 NavigationStack(path: $garagePath) { GarageView() }
             }
-            Tab("Log", systemImage: "square.and.pencil", value: KoiTab.log, role: .search) {
+            Tab("Log", image: "ph-log", value: KoiTab.log, role: .search) {
                 Color.clear
             }
         }
