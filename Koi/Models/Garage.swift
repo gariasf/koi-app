@@ -331,19 +331,22 @@ final class Garage: ObservableObject {
 
     /// Set a car's current odometer directly — the in-place correction behind the live
     /// mileage-cap gauge (which derives this-month's km from the odometer).
-    func setOdometer(_ km: Int, for carID: UUID) {
+    func setOdometer(_ km: Int, for carID: UUID, asOf date: Date = Date()) {
         guard let i = cars.firstIndex(where: { $0.id == carID }) else { return }
-        cars[i].odometerKm = km
+        // Only the latest reading defines "now"; a backdated reading records history without
+        // clobbering a higher current odometer.
+        let readings = cars[i].odometerLog ?? []
+        let isLatest = readings.allSatisfy { $0.date <= date }
+        if isLatest { cars[i].odometerKm = km }
         // Record a dated reading so the monthly-mileage gauge has history to measure against —
         // even for cars that are never fuel-logged. Collapse same-day edits into one reading.
-        let now = Date()
-        var log = cars[i].odometerLog ?? []
-        if let last = log.indices.last, Calendar.current.isDate(log[last].date, inSameDayAs: now) {
-            log[last].km = km
+        var log = readings
+        if let j = log.firstIndex(where: { Calendar.current.isDate($0.date, inSameDayAs: date) }) {
+            log[j].km = km
         } else {
-            log.append(OdometerReading(date: now, km: km))
+            log.append(OdometerReading(date: date, km: km))
         }
-        cars[i].odometerLog = log
+        cars[i].odometerLog = log.sorted { $0.date < $1.date }
         save()
     }
 

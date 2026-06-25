@@ -95,7 +95,7 @@ struct InsuranceVaultView: View {
     private var vaultSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Eyebrow(text: "Also in the vault")
-            let docs = garage.carDocuments(for: car).filter { $0.kind != .insurance }
+            let docs = garage.carDocuments(for: car)   // every saved document, including insurance files
             if docs.isEmpty {
                 EmptyHint(icon: "folder", text: "No documents yet. Keep registration, inspection, anything worth a tap.")
             } else {

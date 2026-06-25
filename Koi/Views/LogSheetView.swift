@@ -25,6 +25,7 @@ struct LogSheetView: View {
     @State private var odometer = ""
     @State private var liters = ""
     @State private var note = ""
+    @State private var date = Date()      // when it happened — defaults to today, can be backdated
     @State private var focus: Field = .amount
     /// Which of the three coupled fuel fields the user has actually typed, oldest→newest.
     /// The one NOT among the last two is the derived (auto-computed) field.
@@ -36,6 +37,10 @@ struct LogSheetView: View {
             typePicker
                 .padding(.horizontal, KoiSpace.gutter)
                 .padding(.top, 14)
+
+            dateRow
+                .padding(.horizontal, KoiSpace.gutter)
+                .padding(.top, 10)
 
             if type == .fuel { fuelBody } else { otherBody }
 
@@ -95,6 +100,20 @@ struct LogSheetView: View {
         guard c.id != car.id else { return }
         Haptics.tap()
         car = c
+    }
+
+    // MARK: date — when it happened (defaults to today; can be backdated for a past fill/expense)
+    private var dateRow: some View {
+        HStack {
+            Text("Date").koiStyle(.eyebrow).foregroundStyle(KoiColors.textSubdued)
+            Spacer()
+            DatePicker("", selection: $date, in: ...Date(), displayedComponents: .date)
+                .labelsHidden()
+                .tint(KoiColors.sage)
+        }
+        .padding(.horizontal, 14).padding(.vertical, 8)
+        .background(KoiColors.fieldFill, in: RoundedRectangle(cornerRadius: KoiRadius.field, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: KoiRadius.field, style: .continuous).strokeBorder(KoiColors.border, lineWidth: 1))
     }
 
     // MARK: type picker
@@ -422,17 +441,18 @@ struct LogSheetView: View {
                 ? (KoiFormat.decimal(String(format: "%.2f", r.total)) ?? 0)
                 : (KoiFormat.decimal(amount) ?? Decimal(r.total))
             garage.addFuelLog(FuelLog(carID: car.id,
+                                      date: date,
                                       amount: total,
                                       liters: r.liters,
                                       odometerKm: Int(odometer.filter(\.isNumber)),
                                       station: nil))
         case .odometer:
             if let km = Int(odometer.filter(\.isNumber)), km > 0 {
-                garage.setOdometer(km, for: car.id)
+                garage.setOdometer(km, for: car.id, asOf: date)
             }
         case .expense, .service, .note:
             let kind: LogKind = type == .expense ? .expense : (type == .service ? .service : .note)
-            garage.addLogEntry(LogEntry(carID: car.id, kind: kind,
+            garage.addLogEntry(LogEntry(carID: car.id, kind: kind, date: date,
                                         amount: KoiFormat.decimal(amount),
                                         note: note.trimmingCharacters(in: .whitespaces),
                                         odometerKm: Int(odometer.filter(\.isNumber))))

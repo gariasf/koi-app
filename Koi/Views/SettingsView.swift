@@ -21,6 +21,7 @@ struct SettingsView: View {
                     if fuel.available { regionSection }
                     dataSection
                     footer
+                    versionLine
                 }
                 .padding(.horizontal, KoiSpace.gutter)
                 .padding(.top, 18)
@@ -137,6 +138,20 @@ struct SettingsView: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(.top, 4)
+    }
+
+    // App version + build — handy when someone reports an issue.
+    private var versionLine: some View {
+        Text("Koi \(Self.appVersion)")
+            .koiStyle(.meta).foregroundStyle(KoiColors.textFaint)
+            .frame(maxWidth: .infinity, alignment: .center)
+            .padding(.top, 2)
+    }
+
+    static var appVersion: String {
+        let v = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—"
+        let b = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "—"
+        return "\(v) (\(b))"
     }
 }
 
