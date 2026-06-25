@@ -4,6 +4,7 @@ import SwiftUI
 struct SettingsView: View {
     @EnvironmentObject private var fuel: FuelPriceStore
     @EnvironmentObject private var garage: Garage
+    @EnvironmentObject private var router: AppRouter
     @Environment(\.dismiss) private var dismiss
     @AppStorage("koi.theme") private var theme = "system"
     @State private var confirmErase = false
@@ -114,6 +115,8 @@ struct SettingsView: View {
         .sheet(isPresented: $showImport) {
             MyCarImportView().environmentObject(garage).presentationDragIndicator(.visible)
         }
+        // Import finished and asked to route to the Garage — close Settings so it shows through.
+        .onChange(of: router.gotoGarage) { _, _ in dismiss() }
     }
 
     private func actionRow(icon: String, title: String, tint: Color) -> some View {
@@ -137,4 +140,4 @@ struct SettingsView: View {
     }
 }
 
-#Preview { SettingsView().environmentObject(FuelPriceStore.preview) }
+#Preview { SettingsView().environmentObject(FuelPriceStore.preview).environmentObject(Garage.preview).environmentObject(AppRouter()) }

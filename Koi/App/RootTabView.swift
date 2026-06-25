@@ -10,6 +10,7 @@ enum KoiTab { case glance, timeline, log, garage }
 struct RootTabView: View {
     @EnvironmentObject private var garage: Garage
     @EnvironmentObject private var fuel: FuelPriceStore
+    @EnvironmentObject private var router: AppRouter
     @State private var tab: KoiTab = {
         let a = ProcessInfo.processInfo.arguments
         if a.contains("-garage") { return .garage }
@@ -35,6 +36,28 @@ struct RootTabView: View {
                                         set: { if !$0 { devScreen = nil } })) {
                 devScreenContent.presentationDragIndicator(.visible)
             }
+            .overlay(alignment: .top) { toastLayer }
+            .animation(.spring(duration: 0.35), value: router.toast)
+            // A deep modal (MyCar import) can ask to land the user on the Garage.
+            .onChange(of: router.gotoGarage) { _, _ in
+                tab = .garage
+                garagePath = NavigationPath()
+            }
+    }
+
+    @ViewBuilder private var toastLayer: some View {
+        if let t = router.toast {
+            KoiToast(text: t.text)
+                .id(t.id)
+                .padding(.top, 6)
+                .transition(.move(edge: .top).combined(with: .opacity))
+                .task(id: t.id) {
+                    try? await Task.sleep(nanoseconds: 2_400_000_000)
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        if router.toast?.id == t.id { router.toast = nil }
+                    }
+                }
+        }
     }
 
     @ViewBuilder private var shell: some View {
@@ -214,4 +237,4 @@ private struct KoiGlassLogCircle: ViewModifier {
     }
 }
 
-#Preview { RootTabView().environmentObject(Garage.preview).environmentObject(FuelPriceStore.preview) }
+#Preview { RootTabView().environmentObject(Garage.preview).environmentObject(FuelPriceStore.preview).environmentObject(AppRouter()) }

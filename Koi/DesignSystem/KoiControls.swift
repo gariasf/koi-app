@@ -253,3 +253,25 @@ struct ModalHeader: View {
             }
     }
 }
+
+/// A calm, transient confirmation pill — sage check + message, floats at the top edge.
+/// Driven by `AppRouter.toast`; the presenter handles timing + transition.
+struct KoiToast: View {
+    let text: String
+
+    var body: some View {
+        HStack(spacing: 9) {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(KoiColors.sage)
+            Text(text)
+                .koiStyle(.body).foregroundStyle(KoiColors.textPrimary)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 11)
+        .background(.regularMaterial, in: Capsule())
+        .overlay(Capsule().strokeBorder(KoiColors.ring, lineWidth: 1))
+        .shadow(color: .black.opacity(0.12), radius: 14, y: 6)
+        .padding(.horizontal, KoiSpace.gutter)
+    }
+}

@@ -5,6 +5,7 @@ import UIKit
 /// Bring history across from the MyCar app. Pick its CSV export, preview what was found, import.
 struct MyCarImportView: View {
     @EnvironmentObject private var garage: Garage
+    @EnvironmentObject private var router: AppRouter
     @Environment(\.dismiss) private var dismiss
 
     @State private var showImporter = false
@@ -43,8 +44,10 @@ struct MyCarImportView: View {
             if let p = parsed, !p.isEmpty {
                 KoiPrimaryButton(title: "Import \(selected.count) car\(selected.count == 1 ? "" : "s")",
                                  systemIcon: "square.and.arrow.down", enabled: !selected.isEmpty) {
+                    let n = selected.count
                     garage.importMyCar(p.selecting(selected))
                     Haptics.success()
+                    router.importSucceeded("Imported \(n) car\(n == 1 ? "" : "s")")
                     dismiss()
                 }
                 .padding(.horizontal, KoiSpace.gutter).padding(.top, 10).padding(.bottom, 12)
@@ -168,4 +171,4 @@ struct MyCarImportView: View {
     ].joined(separator: "\n")
 }
 
-#Preview { MyCarImportView().environmentObject(Garage.preview) }
+#Preview { MyCarImportView().environmentObject(Garage.preview).environmentObject(AppRouter()) }
