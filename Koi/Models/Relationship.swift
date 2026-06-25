@@ -21,11 +21,11 @@ enum Relationship: String, CaseIterable, Identifiable {
         }
     }
 
-    /// SF Symbols placeholders for Lucide home / calendar.
+    /// Phosphor glyphs (rendered by KoiIcon): house / calendar.
     var icon: String {
         switch self {
-        case .own:  return "house"
-        case .plan: return "calendar"
+        case .own:  return Ph.house
+        case .plan: return Ph.calendar
         }
     }
 }

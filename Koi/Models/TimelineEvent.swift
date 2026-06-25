@@ -16,13 +16,13 @@ struct TimelineEvent: Identifiable {
 
     var icon: String {
         switch kind {
-        case .fuel:      return "fuelpump.fill"
-        case .expense:   return "creditcard"
-        case .service:   return "wrench.adjustable"
-        case .note:      return "note.text"
-        case .joined:    return "sparkles"
-        case .swap:      return "arrow.triangle.2.circlepath"
-        case .insurance: return "shield.lefthalf.filled"
+        case .fuel:      return Ph.fuel
+        case .expense:   return Ph.card
+        case .service:   return Ph.wrench
+        case .note:      return Ph.note
+        case .joined:    return Ph.sparkle
+        case .swap:      return Ph.swap
+        case .insurance: return Ph.shield
         }
     }
     var tint: GlanceTint {

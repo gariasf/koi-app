@@ -49,7 +49,7 @@ struct InsuranceVaultView: View {
 
     private var includedCard: some View {
         HStack(spacing: 12) {
-            IconTile(systemName: "shield.lefthalf.filled", tint: .sage)
+            IconTile(systemName: Ph.shield, tint: .sage)
             VStack(alignment: .leading, spacing: 3) {
                 Text("Included in your plan").koiStyle(.listTitle).foregroundStyle(KoiColors.textPrimary)
                 Text(includedSubtitle).koiStyle(.meta).foregroundStyle(KoiColors.textSecondary)
@@ -66,7 +66,7 @@ struct InsuranceVaultView: View {
     private var addPolicyPrompt: some View {
         Button { showAddPolicy = true } label: {
             HStack(spacing: 12) {
-                IconTile(systemName: "shield.lefthalf.filled", tint: .sage)
+                IconTile(systemName: Ph.shield, tint: .sage)
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Add a policy").koiStyle(.listTitle).foregroundStyle(KoiColors.textPrimary)
                     Text("Keep the card, track the renewal").koiStyle(.meta).foregroundStyle(KoiColors.textSecondary)
@@ -140,7 +140,7 @@ struct InsuranceVaultView: View {
                 .frame(width: 42, height: 42)
                 .clipShape(RoundedRectangle(cornerRadius: KoiRadius.tile, style: .continuous))
         } else if d.isPDF {
-            IconTile(systemName: "doc.richtext", tint: .sage)
+            IconTile(systemName: Ph.file, tint: .sage)
         } else {
             IconTile(systemName: d.kind.icon, tint: .neutral)
         }

@@ -33,7 +33,7 @@ struct ReminderDetailView: View {
         RoundedRectangle(cornerRadius: KoiRadius.tile, style: .continuous)
             .fill(urgency.tile.bg)
             .frame(width: 64, height: 64)
-            .overlay(Image(systemName: reminder.kind.icon).font(.system(size: 26, weight: .regular))
+            .overlay(KoiIcon(name: reminder.kind.icon, size: 26)
                 .foregroundStyle(urgency.tile.fg))
             .padding(.top, 12)
     }

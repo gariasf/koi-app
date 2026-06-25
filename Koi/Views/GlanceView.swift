@@ -32,7 +32,7 @@ struct IconTile: View {
         RoundedRectangle(cornerRadius: KoiRadius.tile, style: .continuous)
             .fill(tint.bg)
             .frame(width: 42, height: 42)
-            .overlay(Image(systemName: systemName).font(.system(size: 18, weight: .regular)).foregroundStyle(tint.fg))
+            .overlay(KoiIcon(name: systemName, size: 18).foregroundStyle(tint.fg))
     }
 }
 

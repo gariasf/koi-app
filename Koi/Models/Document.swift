@@ -12,13 +12,13 @@ enum DocumentKind: String, Codable, CaseIterable {
         }
     }
 
-    /// SF Symbols placeholders for Lucide shield / file-text / shield-check.
+    /// Phosphor glyphs (rendered by KoiIcon): shield-check / file-text / seal-check.
     var icon: String {
         switch self {
-        case .insurance:    return "shield.lefthalf.filled"
-        case .registration: return "doc.text"
-        case .inspection:   return "checkmark.seal"
-        case .other:        return "doc"
+        case .insurance:    return Ph.shield
+        case .registration: return Ph.file
+        case .inspection:   return Ph.seal
+        case .other:        return Ph.file
         }
     }
 }

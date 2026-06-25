@@ -12,12 +12,12 @@ enum LogKind: String, Codable, CaseIterable {
         case .note:    return "Note"
         }
     }
-    /// SF Symbols placeholders (Lucide later).
+    /// Phosphor glyphs (rendered by KoiIcon): credit-card / wrench / note-pencil.
     var icon: String {
         switch self {
-        case .expense: return "creditcard"
-        case .service: return "wrench.adjustable"
-        case .note:    return "note.text"
+        case .expense: return Ph.card
+        case .service: return Ph.wrench
+        case .note:    return Ph.note
         }
     }
 }

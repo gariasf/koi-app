@@ -3,13 +3,13 @@ import Foundation
 enum ReminderKind: String, Codable, CaseIterable {
     case service, inspection, insurance, mileageCap
 
-    /// SF Symbols placeholders for Lucide wrench / shield-check / shield / progress.
+    /// Phosphor glyphs (rendered by KoiIcon): wrench / seal-check / shield-check / gauge.
     var icon: String {
         switch self {
-        case .service:    return "wrench.adjustable"
-        case .inspection: return "checkmark.seal"
-        case .insurance:  return "shield.lefthalf.filled"
-        case .mileageCap: return "chart.bar"
+        case .service:    return Ph.wrench
+        case .inspection: return Ph.seal
+        case .insurance:  return Ph.shield
+        case .mileageCap: return Ph.gauge
         }
     }
 }
