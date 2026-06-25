@@ -447,11 +447,40 @@ final class Garage: ObservableObject {
     /// plus the in-progress month while the plan is still active (most plans bill month 1 at signup).
     private func monthsBilled(for plan: Plan) -> Int {
         let now = Date()
-        let cappedEnd = plan.endsAt.map { min($0, now) } ?? now
-        var months = Calendar.current.dateComponents([.month], from: plan.startedAt, to: cappedEnd).month ?? 0
-        let stillActive = (plan.endsAt ?? .distantFuture) > now
+        // Billing stops at whichever comes first: today, the plan's end, or the day it was paid off.
+        let stop = min(plan.endsAt ?? .distantFuture, plan.paidOffAt ?? .distantFuture, now)
+        var months = Calendar.current.dateComponents([.month], from: plan.startedAt, to: stop).month ?? 0
+        let stillActive = (plan.endsAt ?? .distantFuture) > now && (plan.paidOffAt ?? .distantFuture) > now
         if stillActive { months += 1 }
         return max(0, months)
+    }
+
+    // MARK: Finance → owned (mark-as-paid-off)
+
+    /// Fully the user's: an owned plan, no plan, or a finance plan marked paid off.
+    func ownsOutright(_ car: Car) -> Bool {
+        guard let p = plan(for: car) else { return true }
+        if p.kind == .owned { return true }
+        if p.kind == .finance, let d = p.paidOffAt, d <= Date() { return true }
+        return false
+    }
+
+    /// A finance plan past its end date but not yet marked paid off — the gentle nudge trigger.
+    func financeAwaitingPayoff(_ car: Car) -> Bool {
+        guard let p = plan(for: car), p.kind == .finance, p.paidOffAt == nil, let end = p.endsAt else { return false }
+        return end <= Date()
+    }
+
+    func markPaidOff(_ car: Car, on date: Date = Date()) {
+        guard let i = plans.firstIndex(where: { $0.carIDs.contains(car.id) }) else { return }
+        plans[i].paidOffAt = date
+        save()
+    }
+
+    func undoPaidOff(_ car: Car) {
+        guard let i = plans.firstIndex(where: { $0.carIDs.contains(car.id) }) else { return }
+        plans[i].paidOffAt = nil
+        save()
     }
 
     func addFuelLog(_ log: FuelLog) {

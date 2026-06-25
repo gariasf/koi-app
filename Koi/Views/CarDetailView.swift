@@ -7,6 +7,7 @@ struct CarDetailView: View {
     @Environment(\.dismiss) private var dismiss
     private let referenceCar: Car
     @State private var activeSheet: CarSheet?
+    @State private var confirmPayoff = false
 
     init(car: Car) { self.referenceCar = car }
 
@@ -49,6 +50,12 @@ struct CarDetailView: View {
         }
         .sheet(item: $activeSheet) { which in
             sheetContent(which).presentationDragIndicator(.visible)
+        }
+        .confirmationDialog("Mark \(car.displayName) as paid off?", isPresented: $confirmPayoff, titleVisibility: .visible) {
+            Button("Mark as paid off") { garage.markPaidOff(car); Haptics.success() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("From today it's yours — no more monthly cost. What you've paid stays in your history, and you can undo this anytime.")
         }
         .onChange(of: garage.cars) { _, cars in
             // car removed from its Edit screen → leave the now-stale detail
@@ -143,6 +150,9 @@ struct CarDetailView: View {
 
     private var ownershipLine: String {
         if let plan, plan.kind != .owned {
+            if plan.kind == .finance, let paid = plan.paidOffAt {
+                return "Owned · paid off \(paid.formatted(.dateTime.month(.abbreviated).year()))"
+            }
             let since = plan.startedAt.formatted(.dateTime.month(.abbreviated).year())
             switch plan.kind {
             case .finance: return "Financing since \(since)"   // "On a finance" is ungrammatical
@@ -198,6 +208,7 @@ struct CarDetailView: View {
                     Text(swapText(plan))
                         .koiStyle(.meta).foregroundStyle(KoiColors.textSubdued)
                 }
+                if plan.kind == .finance { financePayoff(plan) }
                 if let cap = plan.mileageCapPerMonth, cap > 0 {
                     Button { activeSheet = .mileageHistory } label: {
                         HStack(spacing: 4) {
@@ -212,6 +223,29 @@ struct CarDetailView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .koiCard()
+        }
+    }
+
+    /// Finance → owned affordance: mark it paid off (with a nudge once the term ends), or undo.
+    @ViewBuilder private func financePayoff(_ plan: Plan) -> some View {
+        if let paid = plan.paidOffAt {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Paid off \(paid.formatted(.dateTime.day().month(.abbreviated).year())) · now yours")
+                    .koiStyle(.meta).foregroundStyle(KoiColors.sageText)
+                KoiTextButton(title: "Not paid off after all", role: .muted) {
+                    garage.undoPaidOff(car); Haptics.tap()
+                }
+            }
+            .padding(.top, 4)
+        } else {
+            VStack(alignment: .leading, spacing: 6) {
+                if garage.financeAwaitingPayoff(car) {
+                    Text("The loan term has ended — is it paid off?")
+                        .koiStyle(.meta).foregroundStyle(KoiColors.ochreText)
+                }
+                KoiTextButton(title: "Mark as paid off", systemIcon: "checkmark.seal") { confirmPayoff = true }
+            }
+            .padding(.top, 4)
         }
     }
 
@@ -268,6 +302,9 @@ struct CarDetailView: View {
                 items.append(TLItem(date: car.addedAt,
                                     title: plan.kind == .owned ? "Bought" : "Joined \(plan.provider ?? "the plan")",
                                     subtitle: KoiFormat.shortDate(car.addedAt)))
+            }
+            if let paid = plan.paidOffAt {
+                items.append(TLItem(date: paid, title: "Paid off — now yours", subtitle: KoiFormat.shortDate(paid)))
             }
         }
         return items.sorted { $0.date > $1.date }

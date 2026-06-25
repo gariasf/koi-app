@@ -29,6 +29,7 @@ struct Plan: Identifiable, Codable, Hashable {
     var mileagePools: Bool?            // unused km roll forward to end of term (odo read at return)
     var startedAt: Date = Date()
     var endsAt: Date?
+    var paidOffAt: Date?   // finance: the day it was fully paid → presents as owned, billing stops here
     var includesInsurance: Bool = false
     var includesMaintenance: Bool = false
     var includesRoadside: Bool = false
