@@ -53,7 +53,7 @@ struct ReminderDetailView: View {
     }
     private var fraction: Double { cap > 0 ? min(1, Double(used) / Double(cap)) : 0 }
     private var gaugeColor: Color {
-        if used > cap { return KoiColors.red }
+        if used > cap { return KoiColors.clay }   // over the cap = a calm clay, not the alarm red
         return fraction >= 0.8 ? KoiColors.ochre : KoiColors.sage
     }
 

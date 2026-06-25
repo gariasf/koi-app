@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Koi · App Store frames</title>
+<style>
+  @font-face { font-family:"Geist"; font-weight:400; src:url("fonts/Geist-Regular.woff2") format("woff2"); }
+  @font-face { font-family:"Geist"; font-weight:500; src:url("fonts/Geist-Medium.woff2") format("woff2"); }
+  @font-face { font-family:"Geist"; font-weight:600; src:url("fonts/Geist-SemiBold.woff2") format("woff2"); }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { background:#E9EEE1; }
+
+  /* One App Store slide — exact 6.7" canvas. */
+  .slide{
+    position:relative; width:1284px; height:2778px; overflow:hidden;
+    display:flex; flex-direction:column; align-items:center;
+    font-family:"Geist", -apple-system, system-ui, sans-serif;
+    /* Soft warm-paper → faint-sage wash. Calm, low-contrast — not a hard gradient. */
+    background:
+      radial-gradient(120% 70% at 50% -8%, rgba(216,226,199,.55) 0%, rgba(216,226,199,0) 55%),
+      linear-gradient(176deg, #F7F5EF 0%, #F1F0E8 46%, #E9EEE1 100%);
+  }
+  /* a whisper of grain/vignette so the flat wash has life without looking harsh */
+  .slide::after{
+    content:""; position:absolute; inset:0; pointer-events:none;
+    background:radial-gradient(130% 90% at 50% 38%, rgba(0,0,0,0) 62%, rgba(28,26,22,.045) 100%);
+  }
+
+  .cap{ z-index:2; text-align:center; padding:168px 120px 0; }
+  .cap h1{
+    font-weight:600; font-size:88px; line-height:1.04; letter-spacing:-.02em;
+    color:#26241F;
+  }
+  .cap p{
+    margin-top:26px; font-weight:400; font-size:41px; line-height:1.25;
+    letter-spacing:-.01em; color:#6B6862;
+  }
+
+  /* Device — soft bezel + a wide, low, warm shadow (the opposite of harsh). */
+  .device{
+    z-index:2; margin-top:96px; width:912px; border-radius:92px;
+    background:#1C1A16; padding:13px;
+    box-shadow:
+      0 2px 1px rgba(255,255,255,.18) inset,
+      0 48px 130px -46px rgba(58,49,38,.40),
+      0 12px 40px -28px rgba(58,49,38,.30);
+  }
+  .device img{ display:block; width:100%; border-radius:80px; }
+
+  .accent{ /* a faint sage seam under the phone, grounding it on the paper */
+    position:absolute; left:50%; bottom:120px; transform:translateX(-50%);
+    width:520px; height:34px; border-radius:50%;
+    background:rgba(124,139,111,.16); filter:blur(26px); z-index:1;
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+  const SLIDES = [
+    { img:"screenshots/iphone-6.7/01-glance.png",     h:"Everything, quietly handled",  p:"Open, breathe, close. The one thing that needs you — or nothing at all." },
+    { img:"screenshots/iphone-6.7/02-mileage-cap.png", h:"Never blow your mileage cap",  p:"A live gauge that banks the months you drive less." },
+    { img:"screenshots/iphone-6.7/03-fuel.png",        h:"The cheapest fuel, nearby",    p:"Spain's live prices, on the screen you already open." },
+    { img:"screenshots/iphone-6.7/04-garage.png",      h:"Every car, calmly kept",       p:"Owned, leased, financed or on a plan — one quiet home." },
+    { img:"screenshots/iphone-6.7/05-story.png",       h:"The whole story, by month",    p:"Fills, costs and milestones, gathered without effort." },
+  ];
+  const i = Math.max(0, Math.min(SLIDES.length - 1, parseInt(new URLSearchParams(location.search).get("i") || "0", 10)));
+  const s = SLIDES[i];
+  document.getElementById("root").innerHTML =
+    `<div class="slide"><div class="cap"><h1>${s.h}</h1><p>${s.p}</p></div>`
+    + `<div class="device"><img src="${s.img}"></div></div>`;
+</script>
+</body>
+</html>

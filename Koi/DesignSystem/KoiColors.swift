@@ -60,6 +60,9 @@ enum KoiColors {
     // MARK: Red — overdue / money-at-risk ONLY (never on a resting screen)
     static let red = Color(light: 0xEC2222, dark: 0xED4E4E)
 
+    // MARK: Clay — a calmer, warm over-the-limit red for the mileage gauge (a soft cap, not an alarm)
+    static let clay = Color(light: 0xBE5E4E, dark: 0xDB9183)
+
     // MARK: Per-car accents (light values from the mocks; dark approximated)
     static let slateTile      = Color(light: 0xDCE2E8, dark: 0x232A30)
     static let slateText      = Color(light: 0x52606F, dark: 0xAEB9C5)

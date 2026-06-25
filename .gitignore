@@ -23,3 +23,7 @@ Packages/
 AuthKey_*.p8
 ExportOptions.plist
 build/
+
+# App Store screenshot render output
+appstore/framed/
+.playwright-mcp/
