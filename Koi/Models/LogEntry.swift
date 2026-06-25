@@ -7,9 +7,9 @@ enum LogKind: String, Codable, CaseIterable {
 
     var label: String {
         switch self {
-        case .expense: return "Expense"
-        case .service: return "Service"
-        case .note:    return "Note"
+        case .expense: return String(localized: "Expense")
+        case .service: return String(localized: "Service")
+        case .note:    return String(localized: "Note")
         }
     }
     /// Phosphor glyphs (rendered by KoiIcon): credit-card / wrench / note-pencil.

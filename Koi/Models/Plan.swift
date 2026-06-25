@@ -10,10 +10,10 @@ enum PlanKind: String, Codable, CaseIterable {
 
     var label: String {
         switch self {
-        case .owned:        return "Owned"
-        case .lease:        return "Lease"
-        case .finance:      return "Finance"
-        case .subscription: return "Plan"
+        case .owned:        return String(localized: "Owned")
+        case .lease:        return String(localized: "Lease")
+        case .finance:      return String(localized: "Finance")
+        case .subscription: return String(localized: "Plan")
         }
     }
 }
@@ -50,5 +50,5 @@ enum CapPeriod: String, Codable, CaseIterable, Identifiable {
     var months: Int { self == .year ? 12 : 1 }
     var noun: String { self == .year ? "year" : "month" }   // "Mileage this month" / "this year"
     var unit: String { self == .year ? "km/yr" : "km/mo" }
-    var label: String { self == .year ? "Yearly" : "Monthly" }
+    var label: String { self == .year ? String(localized: "Yearly") : String(localized: "Monthly") }
 }

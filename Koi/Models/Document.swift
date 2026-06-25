@@ -5,10 +5,10 @@ enum DocumentKind: String, Codable, CaseIterable {
 
     var label: String {
         switch self {
-        case .insurance:    return "Insurance"
-        case .registration: return "Registration"
-        case .inspection:   return "Inspection"
-        case .other:        return "Other"
+        case .insurance:    return String(localized: "Insurance")
+        case .registration: return String(localized: "Registration")
+        case .inspection:   return String(localized: "Inspection")
+        case .other:        return String(localized: "Other")
         }
     }
 
