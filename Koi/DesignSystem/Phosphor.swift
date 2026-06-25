@@ -20,6 +20,9 @@ enum Ph {
     static let bell     = "\u{e0ce}"   // remind
     static let folder   = "\u{e24a}"   // docs
     static let sparkle  = "\u{e6a2}"   // joined
+    static let pencil   = "\u{e3b4}"   // pencil-simple (log / edit)
+    static let plus     = "\u{e3d4}"   // add
+    static let target   = "\u{e628}"   // gauge — Glance mark stand-in
 }
 
 extension String {

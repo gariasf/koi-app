@@ -140,7 +140,7 @@ struct GlanceView: View {
                     Text(dateLine).koiStyle(.meta).foregroundStyle(KoiColors.textSubdued)
                 }
                 Spacer()
-                KoiIconButton(systemName: "gearshape", accessibilityLabel: "Settings") { showSettings = true }
+                KoiIconButton(systemName: Ph.gear, accessibilityLabel: "Settings") { showSettings = true }
             }
             Menu {
                 ForEach(garage.residents) { c in

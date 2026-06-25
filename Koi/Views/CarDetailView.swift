@@ -165,11 +165,11 @@ struct CarDetailView: View {
 
     private var actions: some View {
         HStack(spacing: 10) {
-            actionTile("Log", "square.and.pencil") { activeSheet = .log }
-            actionTile("Remind", "bell") { activeSheet = .addReminder }
-            actionTile("Docs", "folder") { activeSheet = .vault }
+            actionTile("Log", Ph.pencil) { activeSheet = .log }
+            actionTile("Remind", Ph.bell) { activeSheet = .addReminder }
+            actionTile("Docs", Ph.folder) { activeSheet = .vault }
             if canSwap {
-                actionTile("Swap", "arrow.triangle.2.circlepath") { activeSheet = .swap }
+                actionTile("Swap", Ph.swap) { activeSheet = .swap }
             }
         }
     }
@@ -177,7 +177,7 @@ struct CarDetailView: View {
     private func actionTile(_ label: String, _ icon: String, _ action: @escaping () -> Void) -> some View {
         Button(action: action) {
             VStack(spacing: 8) {
-                Image(systemName: icon).font(.system(size: 18, weight: .regular)).foregroundStyle(KoiColors.textPrimary)
+                KoiIcon(name: icon, size: 18).foregroundStyle(KoiColors.textPrimary)
                 Text(label).koiStyle(.meta).foregroundStyle(KoiColors.textSecondary)
             }
             .frame(maxWidth: .infinity)

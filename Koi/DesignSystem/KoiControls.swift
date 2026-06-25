@@ -70,8 +70,7 @@ struct KoiIconButton: View {
 
     var body: some View {
         Button(action: action) {
-            Image(systemName: systemName)
-                .font(.system(size: style == .glass ? 17 : 19, weight: .medium))
+            KoiIcon(name: systemName, size: style == .glass ? 17 : 19, weight: .medium)
                 .foregroundStyle(KoiColors.textPrimary)
                 .frame(width: style == .glass ? 38 : 40, height: style == .glass ? 38 : 40)
                 .modifier(KoiIconButtonBackground(style: style))

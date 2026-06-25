@@ -44,7 +44,7 @@ struct GarageView: View {
         // mis-routes the first tap on iOS 17), so the cards scroll cleanly beneath it with no header
         // band cutting in. Bonus: the glass now has content behind it to refract while you scroll.
         .overlay(alignment: .topTrailing) {
-            KoiIconButton(systemName: "plus", accessibilityLabel: "Add a car", style: .glass) { showAdd = true }
+            KoiIconButton(systemName: Ph.plus, accessibilityLabel: "Add a car", style: .glass) { showAdd = true }
                 .padding(.trailing, KoiSpace.gutter)
                 .padding(.top, 18)
         }
