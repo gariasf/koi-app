@@ -1,0 +1,15 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "Koi" : {
+      "comment" : "App name — proper noun, not translated. Seeds the four target locales.",
+      "localizations" : {
+        "ca" : { "stringUnit" : { "state" : "translated", "value" : "Koi" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Koi" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Koi" } },
+        "nb" : { "stringUnit" : { "state" : "translated", "value" : "Koi" } }
+      }
+    }
+  },
+  "version" : "1.0"
+}
