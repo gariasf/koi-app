@@ -207,6 +207,7 @@ struct RootTabView: View {
         case "import":       MyCarImportView().environmentObject(garage)
         case "vault":        if let c = garage.residents.first { InsuranceVaultView(car: c).environmentObject(garage) }
         case "reminder":     if let r = garage.activeReminders.first(where: { $0.kind == .mileageCap }) ?? garage.comingUp.first ?? garage.nextHorizon { ReminderDetailView(reminder: r).environmentObject(garage) }
+        case "mileagehistory": if let c = garage.residents.first(where: { (garage.plan(for: $0)?.mileageCapPerMonth ?? 0) > 0 }) { MileageHistoryView(car: c).environmentObject(garage) }
         case "firstrun":     FirstRunView().environmentObject(garage)
         default:             EmptyView()
         }
