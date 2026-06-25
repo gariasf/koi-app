@@ -773,6 +773,16 @@ final class Garage: ObservableObject {
         addFuelLog(FuelLog(carID: kona.id, date: Date().addingTimeInterval(-3 * 86_400),
                            amount: 48.30, liters: 34.5, odometerKm: 1_500, station: "Cepsa"))
 
+        // Finance — a loan that's just reached its term, so the "mark as paid off" nudge shows.
+        var leon = Car(make: "SEAT", model: "León"); leon.year = 2021; leon.accent = .terracotta
+        leon.odometerKm = 61_000; leon.fuelType = .petrol
+        leon.addedAt = Date().addingTimeInterval(-1130 * 86_400)
+        var fin = Plan(kind: .finance)
+        fin.provider = "Santander"; fin.monthlyCost = 245; fin.initialPayment = 3_000
+        fin.startedAt = Date().addingTimeInterval(-1130 * 86_400)   // ~37 months ago
+        fin.endsAt = Date().addingTimeInterval(-20 * 86_400)        // term ended ~3 weeks ago → nudge
+        addPlanCar(leon, plan: fin)
+
         // `-calm` suppresses the coming-up items, leaving the Glance all-clear (Direction A).
         let calm = ProcessInfo.processInfo.arguments.contains("-calm")
 
