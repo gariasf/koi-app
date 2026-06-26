@@ -11,6 +11,8 @@ settings:
     MARKETING_VERSION: "1.2.0"
     CURRENT_PROJECT_VERSION: "4"
     DEVELOPMENT_LANGUAGE: en
+    DEVELOPMENT_TEAM: AB72ZGY444
+    CODE_SIGN_STYLE: Automatic
 targets:
   Koi:
     type: application
