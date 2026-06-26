@@ -18,9 +18,6 @@ jobs:
           xcodebuild test \
             -project Koi.xcodeproj \
             -scheme Koi \
-            -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest' \
+            -destination 'platform=iOS Simulator,name=iPhone 17,OS=latest' \
             -configuration Debug \
-            CODE_SIGNING_ALLOWED=NO \
-            ASSETCATALOG_COMPILER_APPICON_NAME=""
-            # ^ the app icon is an Icon Composer .icon (needs Xcode 26); the CI runner's Xcode
-            #   can't compile it and tests don't need it, so build without an app icon.
+            CODE_SIGNING_ALLOWED=NO
