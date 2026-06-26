@@ -25,7 +25,7 @@ struct MyCarImportView: View {
 
                     if let p = parsed, !p.isEmpty {
                         preview(p)
-                        KoiTextButton(title: p.summaries.contains { $0.photo != nil } ? "Photos added — pick another .dat" : "Add photos from a .dat backup",
+                        KoiTextButton(title: p.summaries.contains { $0.photo != nil } ? "Photos added. Pick another .dat" : "Add photos from a .dat backup",
                                       systemIcon: "photo") { showDatImporter = true }
                         KoiTextButton(title: "Choose a different file", systemIcon: "arrow.triangle.2.circlepath", role: .muted) { showImporter = true }
                     } else {

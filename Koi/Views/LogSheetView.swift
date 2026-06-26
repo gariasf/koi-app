@@ -252,7 +252,7 @@ struct LogSheetView: View {
         VStack(alignment: .leading, spacing: 16) {
             if type == .odometer {
                 KoiField(label: "Odometer (km)", placeholder: "142,300", text: $odometer, mono: true, keyboard: .numberPad, grouped: true)
-                Text("Updates the car’s current reading — and the monthly mileage gauge.")
+                Text("Updates the car’s current reading, and the monthly mileage gauge.")
                     .koiStyle(.meta).foregroundStyle(KoiColors.textFaint)
             } else {
                 if type != .note {

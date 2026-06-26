@@ -55,7 +55,7 @@ struct CarDetailView: View {
             Button("Mark as paid off") { garage.markPaidOff(car); Haptics.success() }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("From today it's yours — no more monthly cost. What you've paid stays in your history, and you can undo this anytime.")
+            Text("From today it's yours. No more monthly cost. What you've paid stays in your history, and you can undo this anytime.")
         }
         .onChange(of: garage.cars) { _, cars in
             // car removed from its Edit screen → leave the now-stale detail
@@ -232,7 +232,7 @@ struct CarDetailView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Paid off \(paid.formatted(.dateTime.day().month(.abbreviated).year())) · now yours")
                     .koiStyle(.meta).foregroundStyle(KoiColors.sageText)
-                KoiTextButton(title: "Undo — not paid off after all", systemIcon: "arrow.uturn.backward", role: .accent) {
+                KoiTextButton(title: "Not paid off after all", systemIcon: "arrow.uturn.backward", role: .accent) {
                     garage.undoPaidOff(car); Haptics.tap()
                 }
             }
@@ -240,7 +240,7 @@ struct CarDetailView: View {
         } else {
             VStack(alignment: .leading, spacing: 6) {
                 if garage.financeAwaitingPayoff(car) {
-                    Text("The loan term has ended — is it paid off?")
+                    Text("The loan term has ended. Is it paid off?")
                         .koiStyle(.meta).foregroundStyle(KoiColors.ochreText)
                 }
                 KoiTextButton(title: "Mark as paid off", systemIcon: "checkmark.seal") { confirmPayoff = true }
@@ -304,7 +304,7 @@ struct CarDetailView: View {
                                     subtitle: KoiFormat.shortDate(car.addedAt)))
             }
             if let paid = plan.paidOffAt {
-                items.append(TLItem(date: paid, title: "Paid off — now yours", subtitle: KoiFormat.shortDate(paid)))
+                items.append(TLItem(date: paid, title: "Paid off · now yours", subtitle: KoiFormat.shortDate(paid)))
             }
         }
         return items.sorted { $0.date > $1.date }
