@@ -28,3 +28,4 @@ build/
 appstore/framed/
 .playwright-mcp/
 build_sim/
+build_test/
