@@ -5,7 +5,8 @@ on:
 
 jobs:
   ios-tests:
-    runs-on: macos-15
+    # Koi uses iOS 26 APIs (Liquid Glass `.glassEffect`), so it needs Xcode 26 → the macOS 26 runner.
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
       - name: Install XcodeGen
