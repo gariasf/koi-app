@@ -44,15 +44,30 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.gariasf.koi.tests
         GENERATE_INFOPLIST_FILE: YES
+  KoiUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: UITests
+    dependencies:
+      - target: Koi
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.gariasf.koi.uitests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: Koi
 schemes:
   Koi:
     build:
       targets:
         Koi: all
         KoiTests: [test]
+        KoiUITests: [test]
     run:
       config: Debug
     test:
       config: Debug
       targets:
         - KoiTests
+        - KoiUITests
