@@ -27,3 +27,4 @@ build/
 # App Store screenshot render output
 appstore/framed/
 .playwright-mcp/
+build_sim/

@@ -51,7 +51,7 @@ struct CarDetailView: View {
         .sheet(item: $activeSheet) { which in
             sheetContent(which).presentationDragIndicator(.visible)
         }
-        .confirmationDialog("Mark \(car.displayName) as paid off?", isPresented: $confirmPayoff, titleVisibility: .visible) {
+        .alert("Mark \(car.displayName) as paid off?", isPresented: $confirmPayoff) {
             Button("Mark as paid off") { garage.markPaidOff(car); Haptics.success() }
             Button("Cancel", role: .cancel) {}
         } message: {
@@ -232,7 +232,7 @@ struct CarDetailView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Paid off \(paid.formatted(.dateTime.day().month(.abbreviated).year())) · now yours")
                     .koiStyle(.meta).foregroundStyle(KoiColors.sageText)
-                KoiTextButton(title: "Not paid off after all", role: .muted) {
+                KoiTextButton(title: "Undo — not paid off after all", systemIcon: "arrow.uturn.backward", role: .accent) {
                     garage.undoPaidOff(car); Haptics.tap()
                 }
             }
