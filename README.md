@@ -1,102 +1,69 @@
 # Koi
 
-A calm, beauty-first iOS companion for every car in your life — owned, leased, financed,
-on a subscription, or rented. Its soul is **"The Glance"**: open the app and in three
-seconds you know everything's fine, or exactly what's coming — then close it.
+**Your cars, calmly.** A calm, local-first iOS companion for every car in your life — owned, leased,
+financed, on a subscription, or borrowed. Open it, see that everything is fine (or the one thing that
+needs you), and get on with your day. No dashboards, no logs to keep up with.
 
-> Status: **scaffold**. Design-system foundation (tokens, fonts, light/dark) + one proof
-> screen (the Glance all-clear). No data layer or navigation yet. See the roadmap below.
+Its soul is **the Glance**: three seconds of reassurance, then it gets out of the way.
+
+## What it does
+
+- **The Glance** — one screen showing the thing that needs you, or nothing at all.
+- **Mileage carry-over** — for a lease or subscription with a distance cap, a live gauge that *banks*
+  the months you drive less. Unused kilometres roll over to the end of the term, so you see your real
+  allowance, not just this month's.
+- **Cheapest fuel nearby** — in Spain, live government fuel prices on the screen you already open. The
+  rest of the app works worldwide.
+- **Garage** — every car in one quiet home. A financed car can be marked *paid off* and quietly become
+  yours (reversible).
+- **Story** — fills, costs and milestones gathered by month, without effort.
+- **Documents vault** — registration, insurance and inspection, kept on device.
+- **Localized** — English, Spanish, Catalan, Norwegian and French.
+
+## Quiet by design
+
+Everything stays on your iPhone. No account, no sign-in, no servers, no tracking. The only thing Koi
+ever sends is the region you choose, so it can fetch local fuel prices.
 
 ## Stack
 
-- **SwiftUI**, iOS 17+, local-first (no login wall planned).
-- Project is defined by [`project.yml`](project.yml) and generated with **XcodeGen**
-  (the `.xcodeproj` is git-ignored; `project.yml` is the source of truth).
+- **SwiftUI**, iOS 17+, local-first.
+- The Xcode project is generated from [`project.yml`](project.yml) with **XcodeGen** — `project.yml`
+  is the source of truth; the `.xcodeproj` is git-ignored.
 
-## Generate & run
+## Build & run
 
 ```bash
-brew install xcodegen      # one-time, if not installed
+brew install xcodegen      # one-time
 xcodegen generate          # creates Koi.xcodeproj from project.yml
-open Koi.xcodeproj          # then ⌘R in Xcode (iPhone simulator)
+open Koi.xcodeproj          # ⌘R on an iPhone simulator
 ```
 
-Re-run `xcodegen generate` whenever files are added/removed.
+Re-run `xcodegen generate` whenever files are added or removed.
 
-Verified building + running on the iOS 26.5 simulator (iPhone 17). Dev launch args:
-`-seed` loads sample data (owned Betsy + Mocean subscription Kona→Tucson + a returned
-Fiat rental); `-garage` opens on the Garage tab. Used for previews/screenshots.
+Dev launch args: `-seed` loads sample data; `-garage` opens on the Garage tab (used for screenshots).
+
+## Tests
+
+```bash
+xcodebuild test -project Koi.xcodeproj -scheme Koi \
+  -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest'
+```
+
+`Tests/` holds the logic net — money/date wire format, mileage carry-over, the finance→owned payoff
+lifecycle, countdown/urgency and swap lineage. CI runs them on every push.
 
 ## Layout
 
-```
-Koi/
-  App/            KoiApp (entry) · ContentView (host + dev light/dark toggle)
-  DesignSystem/   KoiColors · KoiFonts · KoiMetrics · KoiCard · RippleMark · Bloom
-  Views/          GlanceAllClearView  ← the proof screen
-  Resources/      Info.plist · Assets.xcassets · Fonts/*.ttf
-Scripts/          convert-fonts.sh
-```
+- `Koi/App` — app shell, routing, the tab bar.
+- `Koi/Models` — `Garage` (store + derived reads + mutations) and the domain types.
+- `Koi/Views` — Glance, Garage, CarDetail, Log, Settings, Mileage history, the add/edit sheets.
+- `Koi/DesignSystem` — colours, type, the soft-shadow card, controls, formatters, Phosphor icons.
+- `Koi/Resources` — assets + the `Localizable.xcstrings` catalog.
+- `appstore/` — screenshot framing and the per-locale store metadata deck.
 
-## Design system
+## Related
 
-Ported from the design handoff (`design_handoff_koi_car_companion`). Koi's language is a
-deliberate sibling of the **Sure** finance design system — same Geist type, same
-shadow-border card, same warm-neutral surfaces — with a warm-paper canvas and sage/ochre
-accents layered on top.
-
-- **Color** — `KoiColors`: every token has an exact light + dark value (dynamic `UIColor`).
-  Sage = all-clear/primary; ochre = coming-up; red = overdue **only**. No gradients except
-  the all-clear bloom.
-- **Type** — `KoiFont` + `KoiTextStyle`: Geist Sans (workhorse weight 500) for UI;
-  **Geist Mono** for every meaningful number (money, efficiency, countdowns, dates-as-data).
-- **Elevation** — `koiCard()`: soft shadow + 1px alpha ring. Borders are always 1px alpha,
-  never solid gray.
-- **Brand** — `RippleMark` (the concentric-pond "koi" mark) and `Bloom` (the slow ~7s
-  breathing sage disc behind the all-clear headline).
-
-### Fonts
-
-Geist / Geist Mono ship in the handoff as **`.woff2`**, which iOS cannot bundle. They were
-transcoded to `.ttf` (wrapper stripped, glyphs untouched) into `Koi/Resources/Fonts/` and
-registered via `UIAppFonts`. To regenerate:
-
-```bash
-pip3 install --user fonttools brotli
-Scripts/convert-fonts.sh /path/to/design_handoff_koi_car_companion/sure-tokens/fonts
-```
-
-## Known scaffold shortcuts (replace as the app grows)
-
-- **Icons** are SF Symbols placeholders; the handoff requires **Lucide** (bundle + swap).
-- **Fonts** use `fixedSize` for pixel-exact mock fidelity; production should adopt
-  `relativeTo:` for Dynamic Type.
-- The **light/dark toggle** in `ContentView` is a dev affordance; remove once navigation lands.
-- The Glance is fully data-driven now — active car, Last fill-up, reminders/coming-up,
-  and **live fuel price** (minetur feed; pick region/fuel in Settings).
-- Persistence is a local JSON file in Application Support (sync-ready: stable UUIDs +
-  timestamps). Swap for SwiftData later if wanted.
-
-## Roadmap
-
-- **P1** — foundation + Glance all-clear proof. ✅
-- **P2** — data spine: `Plan ▸ Car` model + local-first store (`Garage`). ✅
-- **P3** — first-run (Own/Plan/Borrow) → add a car → real Glance. ✅ all three forms
-  (owned, on-a-plan, rental).
-- **P4** — Garage (residents/guests) · Car detail (timeline) · quick-add Log with keypad
-  (derives L/100km, updates Glance + timeline). ✅
-- **P5** — subscription **Swap** (new car joins the lineage, plan continues) + rental
-  **Return** (retires to guests). ✅
-- **P6** — reminders + status engine (urgency neutral→ochre→overdue, derived countdowns);
-  the Glance is now adaptive: Direction A (all-clear) ⇄ Direction B (what's coming) +
-  one-tap resolve / snooze. ✅
-- **P7** — relationship-aware insurance: owned/lease/finance → policy + Wallet-style card +
-  renewal reminder + docs vault; subscription → "Included"; rental → excess/CDW. ✅
-- **P8** — live Spain fuel-price hook: minetur gov feed (province query, BOM/Spanish-format
-  parsing), offline-tolerant cache, cheapest-nearby on the Glance, region/fuel Settings. ✅
-  (Needed a scoped ATS exception — the gov server uses legacy TLS.)
-- **P9** — polish (objective pass): haptics on save/resolve + keypad, Dynamic Type
-  (`relativeTo:` fonts), real `PhotosPicker` + auto per-car accent from the photo, calm
-  A⇄B cross-fade. ✅
-  - Remaining polish: swap SF Symbols → **Lucide** (bundle), illustrated photo stand-ins,
-    plus the user's flagged visual/usability fixes (to be listed).
+- **Android** — a native Kotlin/Compose port lives in a sibling repo (same logic, same JSON export
+  format, so you can migrate iPhone ↔ Android).
+- **Site & privacy** — [koi.gariasf.com](https://koi.gariasf.com).
