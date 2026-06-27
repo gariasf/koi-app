@@ -27,7 +27,9 @@
     background:radial-gradient(130% 90% at 50% 38%, rgba(0,0,0,0) 62%, rgba(28,26,22,.045) 100%);
   }
 
-  .cap{ z-index:2; text-align:center; padding:168px 120px 0; }
+  /* Fixed-height caption block so the device sits at the SAME vertical position on every slide,
+     regardless of whether the title/subtitle wrap to one line or two. */
+  .cap{ z-index:2; text-align:center; padding:168px 120px 0; height:560px; }
   .cap h1{
     font-weight:600; font-size:88px; line-height:1.04; letter-spacing:-.02em;
     color:#26241F;
@@ -39,7 +41,7 @@
 
   /* Device — soft bezel + a wide, low, warm shadow (the opposite of harsh). */
   .device{
-    z-index:2; margin-top:96px; width:912px; border-radius:92px;
+    z-index:2; margin-top:40px; width:912px; border-radius:92px;
     background:#1C1A16; padding:13px;
     box-shadow:
       0 2px 1px rgba(255,255,255,.18) inset,
