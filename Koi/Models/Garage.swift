@@ -1,10 +1,12 @@
 import Foundation
 import Combine
+import os
 
 /// Local-first store for the whole garage. The cars you live with — owned or on a plan —
 /// plus their fuel logs. Persists to JSON in Application Support.
 @MainActor
 final class Garage: ObservableObject {
+    private static let log = Logger(subsystem: "com.gariasf.koi", category: "persistence")
     @Published private(set) var cars: [Car] = []
     @Published private(set) var plans: [Plan] = []
     @Published private(set) var fuelLogs: [FuelLog] = []
@@ -387,7 +389,10 @@ final class Garage: ObservableObject {
         cars = []; plans = []; fuelLogs = []; logEntries = []
         reminders = []; policies = []; documents = []
         activeCarID = nil
-        if let url = fileURL { try? FileManager.default.removeItem(at: url) }
+        guard let url = fileURL else { return }
+        // Dispatch onto the same serial queue as save(), so the delete is ordered AFTER any
+        // in-flight write — otherwise a queued save() could re-create the file we just erased.
+        Self.ioQueue.async { try? FileManager.default.removeItem(at: url) }
     }
 
     /// Data portability: a machine-readable JSON snapshot written to a temp file for sharing.
@@ -396,7 +401,8 @@ final class Garage: ObservableObject {
                           reminders: reminders, policies: policies, documents: documents, activeCarID: activeCarID)
         guard let data = try? JSONEncoder().encode(state) else { return nil }
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("koi-export.json")
-        try? data.write(to: url, options: .atomic)
+        // Same at-rest protection as save(): this temp copy holds the same sensitive data in plaintext.
+        try? data.write(to: url, options: [.atomic, .completeFileProtection])
         return url
     }
 
@@ -696,9 +702,9 @@ final class Garage: ObservableObject {
             let backup = url.deletingPathExtension().appendingPathExtension("corrupt.json")
             try? FileManager.default.removeItem(at: backup)
             try? FileManager.default.copyItem(at: url, to: backup)
-            // Was assertionFailure — but that traps in Debug, so any forward-incompatible field
-            // would crash the app on launch. Degrade gracefully: keep the backup, start fresh.
-            print("Garage decode failed (backed up to \(backup.lastPathComponent)): \(error)")
+            // Degrade gracefully (not assertionFailure, which would trap in Debug on any
+            // forward-incompatible field): keep the backup, start fresh.
+            Self.log.error("Garage decode failed (backed up to \(backup.lastPathComponent, privacy: .public)): \(error.localizedDescription, privacy: .public)")
             return
         }
         cars = state.cars

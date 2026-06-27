@@ -63,4 +63,10 @@ struct Car: Identifiable, Codable, Hashable {
         }
         return year.map(String.init) ?? ""
     }
+
+    // Identity is the id, not every field. The synthesized conformance would hash/compare the full
+    // `photo` Data blob on every NavigationLink value and `.onChange(of: cars)` — id-based is correct
+    // and cheap. (Codable still round-trips every property.)
+    static func == (lhs: Car, rhs: Car) -> Bool { lhs.id == rhs.id }
+    func hash(into hasher: inout Hasher) { hasher.combine(id) }
 }

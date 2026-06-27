@@ -31,3 +31,5 @@ build_sim/
 build_test/
 build_archive/
 build_export/
+MyCar-*.dat
+MyCar-*.csv

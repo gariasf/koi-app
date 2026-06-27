@@ -18,7 +18,9 @@ Its soul is **the Glance**: three seconds of reassurance, then it gets out of th
   yours (reversible).
 - **Story** — fills, costs and milestones gathered by month, without effort.
 - **Documents vault** — registration, insurance and inspection, kept on device.
-- **Localized** — English, Spanish, Catalan, Norwegian and French.
+
+The interface is English today; a String Catalog + the localization spec (`LOCALIZATION.md`) are in
+place and more languages are in progress (the Android port already ships es/ca/nb/fr).
 
 ## Quiet by design
 

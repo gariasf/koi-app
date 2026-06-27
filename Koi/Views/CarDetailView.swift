@@ -96,13 +96,27 @@ struct CarDetailView: View {
         }
     }
 
+    /// Reflects the car's worst active reminder, not a hardcoded "all good".
+    private var status: (label: String, fg: Color, bg: Color, dot: Color) {
+        let worst = garage.activeReminders
+            .filter { $0.carID == car.id }
+            .map { garage.urgency($0) }
+            .min(by: { $0.rank < $1.rank })
+        switch worst {
+        case .overdue:  return ("Needs attention", KoiColors.clay, KoiColors.ochreTint, KoiColors.clay)
+        case .comingUp: return ("Coming up", KoiColors.ochreText, KoiColors.ochreTint, KoiColors.ochre)
+        default:        return ("All good", KoiColors.sageText, KoiColors.sageTint, KoiColors.sage)
+        }
+    }
+
     private var statusPill: some View {
-        HStack(spacing: 6) {
-            Circle().fill(KoiColors.sage).frame(width: 7, height: 7)
-            Text("All good").koiStyle(.meta).foregroundStyle(KoiColors.sageText)
+        let s = status
+        return HStack(spacing: 6) {
+            Circle().fill(s.dot).frame(width: 7, height: 7)
+            Text(s.label).koiStyle(.meta).foregroundStyle(s.fg)
         }
         .padding(.horizontal, 10).padding(.vertical, 5)
-        .background(KoiColors.sageTint, in: Capsule())
+        .background(s.bg, in: Capsule())
     }
 
     private var metaRow: some View {

@@ -5,6 +5,14 @@ import Foundation
 struct FuelPriceService {
     private let base = "https://sedeaplicaciones.minetur.gob.es/ServiciosRESTCarburantes/PreciosCarburantes"
 
+    // A government feed with no SLA: cap the wait so a hung server can't stall the refresh for ~60s.
+    private static let session: URLSession = {
+        let c = URLSessionConfiguration.default
+        c.timeoutIntervalForRequest = 15
+        c.waitsForConnectivity = false
+        return URLSession(configuration: c)
+    }()
+
     func fetch(provinceID: String) async throws -> [FuelStation] {
         // province codes are 2-digit INE codes — validate before interpolating into the path
         let code = provinceID.filter(\.isNumber)
@@ -12,7 +20,7 @@ struct FuelPriceService {
               let url = URL(string: "\(base)/EstacionesTerrestres/FiltroProvincia/\(code)") else {
             throw URLError(.badURL)
         }
-        var (data, _) = try await URLSession.shared.data(from: url)
+        var (data, _) = try await Self.session.data(from: url)
         data = Self.stripBOM(data)   // the feed is served with a UTF-8 BOM
         let feed = try JSONDecoder().decode(Feed.self, from: data)
         return feed.stations.compactMap(Self.map)
