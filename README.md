@@ -1,10 +1,14 @@
 # Koi
 
+[![Download on the App Store](https://img.shields.io/badge/Download_on_the-App_Store-0D96F6?style=for-the-badge&logo=apple&logoColor=white)](https://apps.apple.com/app/id6782021898)
+
 **Your cars, calmly.** A calm, local-first iOS companion for every car in your life — owned, leased,
 financed, on a subscription, or borrowed. Open it, see that everything is fine (or the one thing that
 needs you), and get on with your day. No dashboards, no logs to keep up with.
 
 Its soul is **the Glance**: three seconds of reassurance, then it gets out of the way.
+
+**[Koi on the App Store →](https://apps.apple.com/app/id6782021898)**
 
 ## What it does
 
