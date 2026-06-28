@@ -149,6 +149,8 @@ struct ReminderDetailView: View {
                              systemIcon: didUpdate ? "checkmark" : nil, enabled: canUpdate) {
                 if let km = parsedOdo {
                     garage.setOdometer(km, for: reminder.carID); Haptics.success(); didUpdate = true
+                    // flash "Updated", then close — the gauge has moved on the Glance behind it
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { dismiss() }
                 }
             }
             .padding(.horizontal, KoiSpace.gutter).padding(.top, 8).padding(.bottom, 12)

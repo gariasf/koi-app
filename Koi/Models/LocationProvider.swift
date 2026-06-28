@@ -35,8 +35,13 @@ final class LocationProvider: NSObject, ObservableObject {
     private func resolve(lat: Double, lon: Double) {
         coordinate = CLLocationCoordinate2D(latitude: lat, longitude: lon)
         geocoder.reverseGeocodeLocation(CLLocation(latitude: lat, longitude: lon)) { [weak self] placemarks, _ in
-            let name = placemarks?.first?.subAdministrativeArea ?? placemarks?.first?.administrativeArea
-            Task { @MainActor in self?.provinceName = name }
+            let pm = placemarks?.first
+            // CLPlacemark is inconsistent in Spain: the province can land in subAdministrativeArea,
+            // administrativeArea (often the autonomous community), or only the locality. Try each and
+            // prefer the one that maps to a known province so the fuel region actually follows.
+            let candidates = [pm?.subAdministrativeArea, pm?.administrativeArea, pm?.locality].compactMap { $0 }
+            let resolved = candidates.first { Province.match($0) != nil } ?? candidates.first
+            Task { @MainActor in self?.provinceName = resolved }
         }
     }
 }
