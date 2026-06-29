@@ -247,6 +247,11 @@ struct GlanceView: View {
                     }
                     .koiCard(padding: 0)
                 }
+
+                // Cheapest fuel stays visible here too — it used to vanish the moment any reminder
+                // was due (e.g. right after importing a full history), since it only showed on the
+                // all-clear Glance.
+                fuelCard.padding(.top, 4)
             }
             .padding(.horizontal, KoiSpace.gutter)
             .padding(.vertical, KoiSpace.s2)

@@ -37,6 +37,11 @@ struct Car: Identifiable, Codable, Hashable {
     var initialOdometerKm: Int?              // reading when you got the car — mileage-cap baseline + total since
     var odometerLog: [OdometerReading]?      // dated manual readings (optional so pre-existing saves decode)
     var archivedAt: Date?                    // set when shelved — hidden from the garage + not counted, but restorable
+    /// Bumped on every edit. Folded into `==`/`hash` (below) so SwiftUI's value-diffing redraws
+    /// subviews that store a `Car` by value (e.g. ResidentCard) when only the photo or another
+    /// field changes — identity stays cheap (id + an Int), no photo-blob compare. Optional so
+    /// pre-existing saves decode.
+    var revision: Int?
 
     var fuel: FuelType { fuelType ?? .petrol }
     /// Shelved: kept on file (and restorable) but out of the active garage and every tally.
@@ -64,9 +69,16 @@ struct Car: Identifiable, Codable, Hashable {
         return year.map(String.init) ?? ""
     }
 
-    // Identity is the id, not every field. The synthesized conformance would hash/compare the full
-    // `photo` Data blob on every NavigationLink value and `.onChange(of: cars)` — id-based is correct
-    // and cheap. (Codable still round-trips every property.)
-    static func == (lhs: Car, rhs: Car) -> Bool { lhs.id == rhs.id }
-    func hash(into hasher: inout Hasher) { hasher.combine(id) }
+    // Identity is the id plus a cheap `revision` stamp — never the full `photo` Data blob (the
+    // synthesized conformance would hash/compare it on every NavigationLink value and
+    // `.onChange(of: cars)`). Including `revision` keeps comparisons cheap (two scalars) while
+    // letting SwiftUI's value-diffing notice in-place edits (photo, name, odometer…) that keep the
+    // same id, so cards/tiles redraw immediately instead of staying stale until an app restart.
+    static func == (lhs: Car, rhs: Car) -> Bool {
+        lhs.id == rhs.id && (lhs.revision ?? 0) == (rhs.revision ?? 0)
+    }
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+        hasher.combine(revision ?? 0)
+    }
 }

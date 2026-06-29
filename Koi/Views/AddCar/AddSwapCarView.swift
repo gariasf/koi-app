@@ -11,6 +11,7 @@ struct AddSwapCarView: View {
 
     @State private var makeModel = ""
     @State private var odometer = ""
+    @State private var monthlyCost = ""
 
     private var canSave: Bool { !makeModel.trimmingCharacters(in: .whitespaces).isEmpty }
 
@@ -22,6 +23,7 @@ struct AddSwapCarView: View {
                     explainer
                     KoiField(label: "New car · make & model", placeholder: "Hyundai Ioniq 5", text: $makeModel)
                     KoiField(label: "Odometer", placeholder: "0 km", text: $odometer, mono: true, keyboard: .numberPad)
+                    KoiField(label: "Monthly cost", placeholder: "0", text: $monthlyCost, mono: true, keyboard: .decimalPad)
                     planCard
                 }
                 .padding(.horizontal, KoiSpace.gutter).padding(.top, 18).padding(.bottom, 12)
@@ -31,6 +33,8 @@ struct AddSwapCarView: View {
         }
         .background(KoiColors.surface.ignoresSafeArea())
         .toolbar(.hidden, for: .navigationBar)
+        // Prefill with the plan's current price so the user only changes it if the rate moved.
+        .onAppear { if monthlyCost.isEmpty, let m = plan.monthlyCost { monthlyCost = NSDecimalNumber(decimal: m).stringValue } }
     }
 
     private var explainer: some View {
@@ -67,7 +71,7 @@ struct AddSwapCarView: View {
         var car = Car(make: parts.first ?? trimmed, model: parts.count > 1 ? parts[1] : "")
         car.odometerKm = Int(odometer.filter(\.isNumber))
         car.accent = currentCar.accent   // keep the slot's colour — same relationship continuing
-        garage.swapCar(in: plan, to: car)
+        garage.swapCar(in: plan, to: car, newMonthlyCost: KoiFormat.decimal(monthlyCost))
         Haptics.success()
         if let onSaved { onSaved() } else { dismiss() }
     }

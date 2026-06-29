@@ -150,9 +150,29 @@ struct CarDetailView: View {
                 Text(specsLine).koiStyle(.meta).foregroundStyle(KoiColors.textSecondary)
             }
             Text(ownershipLine).koiStyle(.meta).foregroundStyle(KoiColors.textSubdued)
+            // Quiet "how it's doing" context — a sentence and a word, never a chart. Both nil-out
+            // cleanly until there's enough history, so they never show a fabricated number.
+            if let economyLine {
+                Text(economyLine).koiStyle(.meta).foregroundStyle(KoiColors.textSecondary)
+            }
+            if let distanceLine {
+                Text(distanceLine).koiStyle(.meta).foregroundStyle(KoiColors.textSecondary)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .koiCard()
+    }
+
+    /// "About 6.2 L/100km lately, steady" — quiet recent fuel economy. nil until ≥2 fills pair up.
+    private var economyLine: String? {
+        guard let e = garage.recentEconomy(for: car) else { return nil }
+        return "About \(KoiFormat.efficiency(e.l100)) lately, \(e.trend.word)"
+    }
+
+    /// "About 1,100 km a month" — quiet distance pace from the odometer trail. nil without history.
+    private var distanceLine: String? {
+        guard let km = garage.distancePerMonth(for: car) else { return nil }
+        return "About \(KoiFormat.km(km)) a month"
     }
 
     private var specsLine: String {

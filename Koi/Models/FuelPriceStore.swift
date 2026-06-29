@@ -11,14 +11,23 @@ final class FuelPriceStore: ObservableObject {
     @Published private(set) var isLoading = false
     @Published var provinceID: String { didSet { if !isLoadingCache { save() } } }
     @Published var product: FuelProduct { didSet { if !isLoadingCache { save() } } }
+    @Published var manuallyEnabled: Bool { didSet { if !isLoadingCache { save() } } }
     private var isLoadingCache = false   // suppresses didSet→save while reading the cache file
 
     var provinceName: String { Province.name(for: provinceID) }
 
-    /// Live fuel prices come from the Spanish government feed (minetur), so the fuel cards and the
-    /// region picker only apply in Spain. Gated on the device region — elsewhere Koi shows no
-    /// prices and hides region selection, rather than silently defaulting to Madrid.
-    var available: Bool { Locale.current.region?.identifier == "ES" }
+    /// Live fuel prices come from the Spanish government feed (minetur), so the data only exists for
+    /// Spain. Auto-on when the device region is ES — the common case. (`-forceoptin` simulates a
+    /// non-Spain region for screenshots, so the Settings opt-in path is reachable.)
+    var autoEnabled: Bool {
+        if ProcessInfo.processInfo.arguments.contains("-forceoptin") { return false }
+        return Locale.current.region?.identifier == "ES"
+    }
+
+    /// The fuel cards + region picker apply when the device is in Spain, OR the user has explicitly
+    /// opted in (e.g. an expat in Spain whose phone region isn't ES). It never defaults on elsewhere
+    /// — opt-in is deliberate, so non-Spain users aren't shown a wrong Madrid price.
+    var available: Bool { autoEnabled || manuallyEnabled }
 
     private let service = FuelPriceService()
     private let persists: Bool
@@ -27,6 +36,7 @@ final class FuelPriceStore: ObservableObject {
         self.persists = persists
         self.provinceID = "28"   // Madrid default
         self.product = .diesel
+        self.manuallyEnabled = false
         if persists {
             if ProcessInfo.processInfo.arguments.contains("-seed") { seed() } else { load() }
         }
@@ -88,6 +98,7 @@ final class FuelPriceStore: ObservableObject {
         var lastUpdated: Date?
         var provinceID: String
         var product: FuelProduct
+        var manuallyEnabled: Bool?   // optional so older caches still decode
     }
 
     private var fileURL: URL? {
@@ -105,11 +116,12 @@ final class FuelPriceStore: ObservableObject {
         lastUpdated = c.lastUpdated
         provinceID = c.provinceID
         product = c.product
+        manuallyEnabled = c.manuallyEnabled ?? false
     }
 
     private func save() {
         guard persists, let url = fileURL else { return }
-        let c = Cache(stations: stations, lastUpdated: lastUpdated, provinceID: provinceID, product: product)
+        let c = Cache(stations: stations, lastUpdated: lastUpdated, provinceID: provinceID, product: product, manuallyEnabled: manuallyEnabled)
         if let data = try? JSONEncoder().encode(c) {
             try? data.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
         }

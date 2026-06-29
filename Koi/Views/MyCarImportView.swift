@@ -8,11 +8,28 @@ struct MyCarImportView: View {
     @EnvironmentObject private var router: AppRouter
     @Environment(\.dismiss) private var dismiss
 
-    @State private var showImporter = false
     @State private var parsed: MyCarImporter.Result?
     @State private var failed = false
     @State private var selected: Set<UUID> = []
-    @State private var showDatImporter = false
+
+    // One file picker, not two. Two `.fileImporter` modifiers on one view conflict on some iOS
+    // versions (only the last presents), which is why the CSV picker sometimes never opened.
+    @State private var isPicking = false
+    @State private var pickKind: PickKind = .csv
+    @State private var photoNote: String?      // feedback after a .dat pick (success or why it failed)
+    @State private var photoNoteIsError = false
+
+    private enum PickKind {
+        case csv, dat
+        var types: [UTType] {
+            switch self {
+            case .csv: return [.commaSeparatedText, .plainText, .text]
+            // Constrain to the backup file, not `.data` (everything conforms to .data, which is why
+            // the picker used to surface the Photos library and let a photo be chosen by mistake).
+            case .dat: return [UTType(filenameExtension: "dat") ?? .archive, .zip, .archive]
+            }
+        }
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -26,8 +43,13 @@ struct MyCarImportView: View {
                     if let p = parsed, !p.isEmpty {
                         preview(p)
                         KoiTextButton(title: p.summaries.contains { $0.photo != nil } ? "Photos added. Pick another .dat" : "Add photos from a .dat backup",
-                                      systemIcon: "photo") { showDatImporter = true }
-                        KoiTextButton(title: "Choose a different file", systemIcon: "arrow.triangle.2.circlepath", role: .muted) { showImporter = true }
+                                      systemIcon: "photo") { pick(.dat) }
+                        if let note = photoNote {
+                            Text(note).koiStyle(.meta)
+                                .foregroundStyle(photoNoteIsError ? KoiColors.red : KoiColors.sageText)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        KoiTextButton(title: "Choose a different file", systemIcon: "arrow.triangle.2.circlepath", role: .muted) { pick(.csv) }
                     } else {
                         chooseButton
                         if failed {
@@ -54,15 +76,12 @@ struct MyCarImportView: View {
             }
         }
         .background(KoiColors.surface.ignoresSafeArea())
-        .fileImporter(isPresented: $showImporter,
-                      allowedContentTypes: [.commaSeparatedText, .plainText, .text]) { result in
-            parsed = nil; failed = false
-            guard case .success(let url) = result else { return }
-            let scoped = url.startAccessingSecurityScopedResource()
-            defer { if scoped { url.stopAccessingSecurityScopedResource() } }
-            guard let text = try? String(contentsOf: url, encoding: .utf8) else { failed = true; return }
-            let r = MyCarImporter.parse(text)
-            if r.isEmpty { failed = true } else { parsed = r; selected = Set(r.cars.map { $0.id }) }
+        // A single importer (not two) — its allowed types follow `pickKind`, set just before opening.
+        .fileImporter(isPresented: $isPicking, allowedContentTypes: pickKind.types) { result in
+            switch pickKind {
+            case .csv: handleCSV(result)
+            case .dat: handleDat(result)
+            }
         }
         .onAppear {
             // dev: `-importdemo` shows the selectable preview without a file picker
@@ -71,18 +90,43 @@ struct MyCarImportView: View {
                 if !r.isEmpty { parsed = r; selected = Set(r.cars.map { $0.id }) }
             }
         }
-        .fileImporter(isPresented: $showDatImporter, allowedContentTypes: [.data]) { result in
-            guard case .success(let url) = result, let p = parsed else { return }
-            let scoped = url.startAccessingSecurityScopedResource()
-            defer { if scoped { url.stopAccessingSecurityScopedResource() } }
-            guard let data = try? Data(contentsOf: url) else { return }
-            let map = MyCarImporter.photos(fromDat: data, vehicleIDByCarID: p.vehicleIDByCarID)
-            if !map.isEmpty { parsed = p.withPhotos(map) }
+    }
+
+    private func pick(_ kind: PickKind) { pickKind = kind; isPicking = true }
+
+    private func handleCSV(_ result: Result<URL, Error>) {
+        parsed = nil; failed = false; photoNote = nil
+        guard case .success(let url) = result else { return }
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+        guard let text = try? String(contentsOf: url, encoding: .utf8) else { failed = true; return }
+        let r = MyCarImporter.parse(text)
+        if r.isEmpty { failed = true } else { parsed = r; selected = Set(r.cars.map { $0.id }) }
+    }
+
+    private func handleDat(_ result: Result<URL, Error>) {
+        photoNote = nil
+        guard case .success(let url) = result, let p = parsed else { return }
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+        guard let data = try? Data(contentsOf: url) else {
+            photoNoteIsError = true
+            photoNote = "Couldn't read that file. Pick the .dat backup MyCar made."
+            return
+        }
+        let map = MyCarImporter.photos(fromDat: data, vehicleIDByCarID: p.vehicleIDByCarID)
+        if map.isEmpty {
+            photoNoteIsError = true
+            photoNote = "Couldn't find car photos in that file. Make sure it's MyCar's .dat backup, not a photo."
+        } else {
+            parsed = p.withPhotos(map)
+            photoNoteIsError = false
+            photoNote = "Added \(map.count) photo\(map.count == 1 ? "" : "s")."
         }
     }
 
     private var chooseButton: some View {
-        Button { showImporter = true } label: {
+        Button { pick(.csv) } label: {
             VStack(spacing: 8) {
                 Image(systemName: "doc.badge.arrow.up").font(.system(size: 24, weight: .regular))
                     .foregroundStyle(KoiColors.sageText)

@@ -18,7 +18,7 @@ struct SettingsView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     appearanceSection
-                    if fuel.available { regionSection }
+                    regionSection
                     dataSection
                     footer
                     versionLine
@@ -30,6 +30,7 @@ struct SettingsView: View {
         }
         .background(KoiColors.surface.ignoresSafeArea())
         .onChange(of: fuel.provinceID) { Task { await fuel.refresh() } }
+        .onChange(of: fuel.manuallyEnabled) { if fuel.manuallyEnabled { Task { await fuel.refresh() } } }
         .task { exportURL = garage.exportJSON() }
     }
 
@@ -45,26 +46,44 @@ struct SettingsView: View {
         }
     }
 
-    private var regionSection: some View {
+    @ViewBuilder private var regionSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Eyebrow(text: "Region")
-            Menu {
-                ForEach(Province.all) { p in
-                    Button(p.name) { fuel.setProvince(p.id) }
+            Eyebrow(text: "Fuel prices")
+            // Where the phone isn't set to Spain, offer an explicit opt-in (e.g. an expat in Spain)
+            // instead of hiding the feature entirely. Off by default — never a wrong price elsewhere.
+            if !fuel.autoEnabled {
+                Toggle(isOn: $fuel.manuallyEnabled) {
+                    Text("Show Spanish fuel prices").koiStyle(.body).foregroundStyle(KoiColors.textPrimary)
                 }
-            } label: {
-                HStack {
-                    Text(fuel.provinceName).koiStyle(.body).foregroundStyle(KoiColors.textPrimary)
-                    Spacer()
-                    Image(systemName: "chevron.up.chevron.down").font(.system(size: 12)).foregroundStyle(KoiColors.textSubdued)
-                }
-                .padding(.horizontal, 14).padding(.vertical, 12)
-                .background(KoiColors.fieldFill, in: RoundedRectangle(cornerRadius: KoiRadius.field, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: KoiRadius.field, style: .continuous).strokeBorder(KoiColors.border, lineWidth: 1))
+                .tint(KoiColors.sage)
             }
-            Text("Prices come from the Spanish government’s open feed (minetur), and are kept on your device.")
-                .koiStyle(.meta).foregroundStyle(KoiColors.textSubdued)
-                .fixedSize(horizontal: false, vertical: true)
+            if fuel.available {
+                provinceMenu
+                Text("Prices come from the Spanish government’s open feed (minetur), and are kept on your device.")
+                    .koiStyle(.meta).foregroundStyle(KoiColors.textSubdued)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                Text("Turn this on if you’re in Spain but your phone’s region isn’t set to Spain. Otherwise Koi shows no fuel prices.")
+                    .koiStyle(.meta).foregroundStyle(KoiColors.textSubdued)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private var provinceMenu: some View {
+        Menu {
+            ForEach(Province.all) { p in
+                Button(p.name) { fuel.setProvince(p.id) }
+            }
+        } label: {
+            HStack {
+                Text(fuel.provinceName).koiStyle(.body).foregroundStyle(KoiColors.textPrimary)
+                Spacer()
+                Image(systemName: "chevron.up.chevron.down").font(.system(size: 12)).foregroundStyle(KoiColors.textSubdued)
+            }
+            .padding(.horizontal, 14).padding(.vertical, 12)
+            .background(KoiColors.fieldFill, in: RoundedRectangle(cornerRadius: KoiRadius.field, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: KoiRadius.field, style: .continuous).strokeBorder(KoiColors.border, lineWidth: 1))
         }
     }
 

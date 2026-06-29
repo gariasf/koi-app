@@ -24,6 +24,7 @@ struct LogSheetView: View {
     @State private var perLiter = ""      // fuel: €/L
     @State private var odometer = ""
     @State private var liters = ""
+    @State private var filledToFull = true   // fuel: tank-to-tank is what makes L/100km honest; default on
     @State private var note = ""
     @State private var date = Date()      // when it happened — defaults to today, can be backdated
     @State private var focus: Field = .amount
@@ -159,6 +160,8 @@ struct LogSheetView: View {
 
             if hasQuickActions { quickActions.padding(.top, 14) }
 
+            fullTankToggle.padding(.top, 10)
+
             if overTank {
                 Text("More than the tank holds (\(litersLabel(car.tankCapacityL ?? 0)))")
                     .koiStyle(.meta).foregroundStyle(KoiColors.red)
@@ -200,18 +203,32 @@ struct LogSheetView: View {
         .buttonStyle(.plain)
     }
 
-    /// Contextual one-taps: accept today's pump price, or fill the tank to its known size.
-    private var hasQuickActions: Bool { marketPrice != nil || (car.tankCapacityL ?? 0) > 0 }
+    /// Contextual one-tap: fill the tank to its known size. (No "today's pump price" suggestion —
+    /// it's the cheapest *nearby* station's price, which isn't necessarily where you filled up.)
+    private var hasQuickActions: Bool { (car.tankCapacityL ?? 0) > 0 }
 
     @ViewBuilder private var quickActions: some View {
         HStack(spacing: 10) {
-            if let mp = marketPrice {
-                quickPill("Today €\(pricePerLiterString(mp))", icon: "fuelpump") { applyMarketPrice(mp) }
-            }
             if let tank = car.tankCapacityL, tank > 0 {
                 quickPill("Fill to full · \(litersLabel(tank))", icon: "drop.fill") { fillToFull(tank) }
             }
         }
+    }
+
+    /// Whether the tank was filled to full — the signal the L/100km math needs. Default on; one tap
+    /// marks a partial fill so it's summed into the next full-tank reading instead of measured alone.
+    private var fullTankToggle: some View {
+        Button { filledToFull.toggle(); Haptics.tap() } label: {
+            HStack(spacing: 6) {
+                Image(systemName: filledToFull ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 14))
+                Text("Filled to full").koiStyle(.meta)
+            }
+            .foregroundStyle(filledToFull ? KoiColors.sageText : KoiColors.textSubdued)
+            .padding(.horizontal, 12).padding(.vertical, 7)
+            .background(Capsule().fill(filledToFull ? KoiColors.sageTint : KoiColors.insetFill))
+        }
+        .buttonStyle(.plain)
     }
 
     private func quickPill(_ title: String, icon: String, action: @escaping () -> Void) -> some View {
@@ -303,12 +320,6 @@ struct LogSheetView: View {
         return (t, p, l)
     }
 
-    private var marketProduct: FuelProduct? { car.fuel.nearbyProduct }
-    private var marketPrice: Double? {
-        guard let p = marketProduct else { return nil }
-        return fuel.cheapest(product: p).flatMap { p.price($0) }
-    }
-
     private var overTank: Bool {
         guard let tank = car.tankCapacityL, tank > 0 else { return false }
         return resolved.liters > tank * 1.02   // small tolerance for top-offs / rounding
@@ -395,16 +406,9 @@ struct LogSheetView: View {
         focus = field
     }
 
-    private func applyMarketPrice(_ mp: Double) {
-        Haptics.tap()
-        perLiter = pricePerLiterString(mp)
-        touch(.perLiter, perLiter)
-        // Never land on the derived field — a focused-but-empty chip hides its computed value.
-        focus = derivedField == .liters ? .amount : (liters.isEmpty ? .liters : .amount)
-    }
-
     private func fillToFull(_ tank: Double) {
         Haptics.tap()
+        filledToFull = true
         liters = litersValue(tank)
         touch(.liters, liters)
         focus = derivedField == .perLiter ? .amount : (perLiter.isEmpty ? .perLiter : .amount)
@@ -448,7 +452,8 @@ struct LogSheetView: View {
                                       amount: total,
                                       liters: r.liters,
                                       odometerKm: Int(odometer.filter(\.isNumber)),
-                                      station: nil))
+                                      station: nil,
+                                      filledToFull: filledToFull))
         case .odometer:
             if let km = Int(odometer.filter(\.isNumber)), km > 0 {
                 garage.setOdometer(km, for: car.id, asOf: date)

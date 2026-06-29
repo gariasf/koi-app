@@ -2,6 +2,18 @@ import Foundation
 import Combine
 import os
 
+/// One-word direction of a car's recent fuel economy — the calm alternative to a trend chart.
+enum EconomyTrend {
+    case steady, creepingUp, improving
+    var word: String {
+        switch self {
+        case .steady:     return String(localized: "steady")
+        case .creepingUp: return String(localized: "creeping up")
+        case .improving:  return String(localized: "improving")
+        }
+    }
+}
+
 /// Local-first store for the whole garage. The cars you live with — owned or on a plan —
 /// plus their fuel logs. Persists to JSON in Application Support.
 @MainActor
@@ -59,30 +71,77 @@ final class Garage: ObservableObject {
         fuelLogs(for: car).last
     }
 
-    /// L/100km for a log, derived from the previous fill's odometer. nil if no prior fill.
+    /// L/100km for a single log — the same trustworthy value the timeline shows, looked up from the
+    /// per-car map (nil for a partial fill, a broken interval, or no measurable distance).
     func efficiencyL100(for log: FuelLog) -> Double? {
-        guard let myOdo = log.odometerKm else { return nil }
-        let byOdo = fuelLogs.filter { $0.carID == log.carID && $0.odometerKm != nil }
-            .sorted { ($0.odometerKm ?? 0) < ($1.odometerKm ?? 0) }
-        guard let idx = byOdo.firstIndex(of: log), idx > 0, let prev = byOdo[idx - 1].odometerKm else { return nil }
-        let km = myOdo - prev
-        guard km > 0 else { return nil }
-        return log.liters / Double(km) * 100
+        guard let car = cars.first(where: { $0.id == log.carID }) else { return nil }
+        return efficiencies(for: car)[log.id]
     }
 
-    /// Efficiency (L/100km) for every fuel log of a car, computed in one pass (one sort)
-    /// instead of re-sorting all logs per row. Keyed by log id; a log with no prior reading is absent.
+    /// Per-fill L/100km keyed by log id, using the proper full-tank-to-full-tank method: a value is
+    /// emitted only at a *full* fill that has an odometer and a prior full-tank odometer to measure
+    /// back to. Partial fills (and intermediate fills missing an odometer) aren't measured alone —
+    /// their litres are summed into the enclosing full→full interval. A fill flagged as following a
+    /// missed refuel restarts the chain, so its corrupt interval is never shown. `nil`/unknown flags
+    /// are read as "full / nothing missed". Anything uncertain yields no number, never a wrong one.
     func efficiencies(for car: Car) -> [UUID: Double] {
-        let logs = fuelLogs(for: car).filter { $0.odometerKm != nil }
-            .sorted { ($0.odometerKm ?? 0) < ($1.odometerKm ?? 0) }
-        guard logs.count > 1 else { return [:] }
+        let logs = fuelLogs(for: car).sorted {
+            $0.date != $1.date ? $0.date < $1.date : ($0.odometerKm ?? 0) < ($1.odometerKm ?? 0)
+        }
         var map: [UUID: Double] = [:]
-        for i in 1..<logs.count {
-            guard let a = logs[i].odometerKm, let b = logs[i - 1].odometerKm else { continue }
-            let km = a - b
-            if km > 0 { map[logs[i].id] = logs[i].liters / Double(km) * 100 }
+        var lastFullOdo: Int? = nil     // odometer at the last clean full fill — the interval start
+        var litersSinceFull = 0.0       // litres bought since that full fill (partials accumulate here)
+        for log in logs {
+            let isFull = log.filledToFull ?? true
+            if log.missedPrevious == true {
+                // sequence broken: don't measure this interval, restart the baseline here
+                lastFullOdo = isFull ? log.odometerKm : nil
+                litersSinceFull = 0
+                continue
+            }
+            litersSinceFull += log.liters
+            // can only close an interval at a full fill that carries an odometer to anchor on
+            guard isFull, let here = log.odometerKm else { continue }
+            if let start = lastFullOdo, here > start {
+                map[log.id] = litersSinceFull / Double(here - start) * 100
+            }
+            lastFullOdo = here
+            litersSinceFull = 0
         }
         return map
+    }
+
+    /// Recent fuel economy as one calm figure: the mean of the last few per-fill L/100km values
+    /// (a plain mean of valid per-fill figures, robust to one bad reading), plus a one-word trend.
+    /// nil until at least two fills pair up — never a fabricated number.
+    func recentEconomy(for car: Car, sample: Int = 5) -> (l100: Double, trend: EconomyTrend)? {
+        let effMap = efficiencies(for: car)
+        guard !effMap.isEmpty else { return nil }
+        // chronological per-fill values (a fill without a paired reading is simply absent)
+        let perFill = fuelLogs(for: car).sorted { $0.date < $1.date }.compactMap { effMap[$0.id] }
+        guard perFill.count >= 2 else { return nil }
+        let recent = Array(perFill.suffix(sample))
+        let avg = recent.reduce(0, +) / Double(recent.count)
+        // trend: average the older half of the window vs the newer half (lower L/100km is better)
+        let half = recent.count / 2
+        guard half > 0 else { return (avg, .steady) }
+        let older = recent.prefix(half), newer = recent.suffix(recent.count - half)
+        let o = older.reduce(0, +) / Double(older.count)
+        let n = newer.reduce(0, +) / Double(newer.count)
+        let delta = o == 0 ? 0 : (n - o) / o
+        let trend: EconomyTrend = abs(delta) < 0.05 ? .steady : (delta < 0 ? .improving : .creepingUp)
+        return (avg, trend)
+    }
+
+    /// Roughly how far a car is driven each month, from its odometer trail since you got it.
+    /// nil without a baseline or under ~a month of history (avoids divide-by-near-zero).
+    func distancePerMonth(for car: Car) -> Int? {
+        let baseline = car.initialOdometerKm ?? car.odometerLog?.first?.km
+        guard let baseline, let current = car.odometerKm, current > baseline else { return nil }
+        let start = car.odometerLog?.first?.date ?? car.addedAt
+        guard let days = Calendar.current.dateComponents([.day], from: start, to: Date()).day,
+              days >= 30 else { return nil }
+        return Int((Double(current - baseline) / (Double(days) / 30.44)).rounded())
     }
 
     /// Km driven in the current cap cycle (month or year, per the plan), derived live from
@@ -307,11 +366,13 @@ final class Garage: ObservableObject {
 
     /// The Plan ▸ Car proof: the same plan continues, the new car joins the lineage,
     /// cost/reminders/mileage carry over, the prior car retires into history.
-    func swapCar(in plan: Plan, to newCar: Car) {
+    func swapCar(in plan: Plan, to newCar: Car, newMonthlyCost: Decimal? = nil) {
         guard let pIdx = plans.firstIndex(where: { $0.id == plan.id }) else { return }
         let retiringCarID = plans[pIdx].carIDs.last   // capture BEFORE appending the new car
         cars.append(newCar)
         plans[pIdx].carIDs.append(newCar.id)
+        // The monthly price can change at a swap (new car, new rate) — update it if the user edited it.
+        if let newMonthlyCost { plans[pIdx].monthlyCost = newMonthlyCost }
         activeCarID = newCar.id
         // Carry the plan's still-active, date-based reminders onto the new car so they aren't
         // orphaned on the retired one (mileage-cap follows the plan automatically; mileage-based
@@ -325,9 +386,15 @@ final class Garage: ObservableObject {
         save()
     }
 
+    /// Stamp a car so SwiftUI value-diffing (id + revision) redraws subviews that hold it by value
+    /// (ResidentCard, photo tiles…) after an in-place edit. Call right before `save()` on any path
+    /// that mutates a displayed field.
+    private func bumpRevision(_ i: Int) { cars[i].revision = (cars[i].revision ?? 0) + 1 }
+
     func updateCar(_ car: Car) {
         guard let i = cars.firstIndex(where: { $0.id == car.id }) else { return }
         cars[i] = car
+        bumpRevision(i)
         save()
     }
 
@@ -349,6 +416,7 @@ final class Garage: ObservableObject {
             log.append(OdometerReading(date: date, km: km))
         }
         cars[i].odometerLog = log.sorted { $0.date < $1.date }
+        bumpRevision(i)
         save()
     }
 
@@ -357,6 +425,7 @@ final class Garage: ObservableObject {
     func archiveCar(_ car: Car) {
         guard let i = cars.firstIndex(where: { $0.id == car.id }) else { return }
         cars[i].archivedAt = Date()
+        bumpRevision(i)
         if activeCarID == car.id { activeCarID = residents.first?.id }
         save()
     }
@@ -365,6 +434,7 @@ final class Garage: ObservableObject {
     func unarchiveCar(_ car: Car) {
         guard let i = cars.firstIndex(where: { $0.id == car.id }) else { return }
         cars[i].archivedAt = nil
+        bumpRevision(i)
         save()
     }
 
@@ -423,6 +493,7 @@ final class Garage: ObservableObject {
            let i = cars.firstIndex(where: { $0.id == entry.carID }),
            km > (cars[i].odometerKm ?? 0) {
             cars[i].odometerKm = km
+            bumpRevision(i)
         }
         save()
     }
@@ -494,6 +565,7 @@ final class Garage: ObservableObject {
         if let i = cars.firstIndex(where: { $0.id == log.carID }),
            let odo = log.odometerKm, odo > (cars[i].odometerKm ?? 0) {
             cars[i].odometerKm = odo
+            bumpRevision(i)
         }
         save()
     }
@@ -752,13 +824,24 @@ final class Garage: ObservableObject {
         betsy.year = 2018; betsy.nickname = "Betsy"; betsy.plate = "4821 KPD"
         betsy.odometerKm = 142_300; betsy.accent = .slate
         betsy.fuelType = .diesel; betsy.purchasePrice = 18_500; betsy.tankCapacityL = 55
+        betsy.initialOdometerKm = 120_000                          // baseline → distance-per-month line
+        betsy.addedAt = Date().addingTimeInterval(-420 * 86_400)   // owned ~14 months → a sane monthly pace
         betsy.photo = Self.seedPhoto("golf")
         addOwnedCar(betsy)
+        // Three full fills with odometers → two paired L/100km values, so the recent-economy line shows.
+        addFuelLog(FuelLog(carID: betsy.id, date: Date().addingTimeInterval(-19 * 86_400),
+                           amount: 58.10, liters: 46.0, odometerKm: 140_800, station: "Repsol"))
         addFuelLog(FuelLog(carID: betsy.id, date: Date().addingTimeInterval(-12 * 86_400),
                            amount: 57.20, liters: 44.0, odometerKm: 141_551, station: "Repsol"))
         addFuelLog(FuelLog(carID: betsy.id, date: Date().addingTimeInterval(-5 * 86_400),
                            amount: 61.40, liters: 47.2, odometerKm: 142_300, station: "Repsol"))
 
+        // `-calm` seeds only the owned Betsy — no plans, no reminders → the all-clear Glance
+        // (Direction A). The mileage-cap gauge is synthesized live from a plan, so suppressing stored
+        // reminders alone isn't enough; the capped subscription has to be absent too.
+        let calm = ProcessInfo.processInfo.arguments.contains("-calm")
+
+        if !calm {
         // Subscription — Mocean, Tucson swapped to a Kona 2025 (same plan continues)
         var tucson = Car(make: "Hyundai", model: "Tucson"); tucson.accent = .sage
         tucson.addedAt = Date().addingTimeInterval(-270 * 86_400)
@@ -788,9 +871,7 @@ final class Garage: ObservableObject {
         fin.startedAt = Date().addingTimeInterval(-1130 * 86_400)   // ~37 months ago
         fin.endsAt = Date().addingTimeInterval(-20 * 86_400)        // term ended ~3 weeks ago → nudge
         addPlanCar(leon, plan: fin)
-
-        // `-calm` suppresses the coming-up items, leaving the Glance all-clear (Direction A).
-        let calm = ProcessInfo.processInfo.arguments.contains("-calm")
+        }   // end `if !calm` — the plan-based cars
 
         // Reminders — two coming up (→ Glance Direction B), two on the horizon (neutral)
         if !calm {

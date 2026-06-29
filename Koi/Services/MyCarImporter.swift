@@ -59,8 +59,18 @@ enum MyCarImporter {
 
         var indexByVID: [String: Int] = [:]   // MyCar vehicleId → index into result.cars
         var unitByVID: [String: String] = [:]  // odometerUnit ("0" = miles, else km)
+        var volByVID: [String: String] = [:]   // fuelUnit ("1" = US gal, "2" = imp gal, else litres)
         var maxOdo: [String: Int] = [:]
+        var readingsByVID: [String: [OdometerReading]] = [:]   // dated odometer trail, from every section
+        var soldByVID: [String: Date] = [:]    // selling date → archive the car
         var counts: [String: (f: Int, s: Int, e: Int, n: Int)] = [:]
+
+        // Fold a dated odometer reading into both the running max and the per-car trail.
+        func record(_ vid: String, _ km: Int?, _ date: Date?) {
+            guard let km, km > 0 else { return }
+            maxOdo[vid] = max(maxOdo[vid] ?? 0, km)
+            if let date { readingsByVID[vid, default: []].append(OdometerReading(date: date, km: km)) }
+        }
 
         // Vehicles → owned cars
         if let v = sections["Vehicles"] {
@@ -73,13 +83,22 @@ enum MyCarImporter {
                 if !name.isEmpty { car.nickname = name }
                 car.year = int(field(row, v.headers, "year"))
                 car.fuelType = fuelType(field(row, v.headers, "fuelType"))
-                car.tankCapacityL = double(field(row, v.headers, "tankCapacity")).flatMap { $0 > 0 ? $0 : nil }
-                car.purchasePrice = decimal(field(row, v.headers, "purchasePrice")).flatMap { $0 > 0 ? $0 : nil }
-                car.soldPrice = decimal(field(row, v.headers, "sellingPrice")).flatMap { $0 > 0 ? $0 : nil }
                 let unit = field(row, v.headers, "odometerUnit")
                 unitByVID[vid] = unit
+                let vol = field(row, v.headers, "fuelUnit")
+                volByVID[vid] = vol
+                car.tankCapacityL = volumeLiters(field(row, v.headers, "tankCapacity"), unit: vol).flatMap { $0 > 0 ? $0 : nil }
+                car.purchasePrice = decimal(field(row, v.headers, "purchasePrice")).flatMap { $0 > 0 ? $0 : nil }
+                car.soldPrice = decimal(field(row, v.headers, "sellingPrice")).flatMap { $0 > 0 ? $0 : nil }
                 car.initialOdometerKm = odometerKm(field(row, v.headers, "purchaseOdometer"), unit: unit)
                 car.addedAt = date(field(row, v.headers, "purchaseDateTime")) ?? Date()
+                record(vid, car.initialOdometerKm, car.addedAt)
+                // A car with a selling date has left — archive it (drops out of the garage and stops
+                // generating reminders) while keeping its history. Record the sale odometer too.
+                if let sold = date(field(row, v.headers, "sellingDateTime")) {
+                    soldByVID[vid] = sold
+                    record(vid, odometerKm(field(row, v.headers, "sellingOdometer"), unit: unit), sold)
+                }
                 car.accent = accents[result.cars.count % accents.count]
                 result.cars.append(car)
                 result.plans.append(Plan(kind: .owned, carIDs: [car.id]))
@@ -110,16 +129,24 @@ enum MyCarImporter {
                 let vid = field(row, r.headers, "vehicleId")
                 guard let cid = carID(vid) else { continue }
                 let total = decimal(field(row, r.headers, "Total")) ?? 0
-                let liters = double(field(row, r.headers, "Amount")) ?? 0
+                // Convert the fill volume to litres (MyCar may store US/imperial gallons), so every
+                // derived L/100km is correct — odometer is already unit-converted, volume must match.
+                let liters = volumeLiters(field(row, r.headers, "Amount"), unit: volByVID[vid]) ?? 0
                 guard total > 0 || liters > 0 else { continue }       // skip empty refuels
                 let odo = odometerKm(field(row, r.headers, "Odometer"), unit: unitByVID[vid])
+                let when = date(field(row, r.headers, "DateTime")) ?? Date()
+                // TankLevelAfter ~100 ⇒ filled to full; blank ⇒ unknown (treated as full downstream).
+                let filledToFull = double(field(row, r.headers, "TankLevelAfter")).map { $0 >= 99.5 }
+                let missedPrevious = field(row, r.headers, "MissedPreviousRefuel") == "1"
                 result.fuels.append(FuelLog(
                     carID: cid,
-                    date: date(field(row, r.headers, "DateTime")) ?? Date(),
+                    date: when,
                     amount: total, currency: "EUR", liters: liters,
                     odometerKm: odo,
-                    station: nilIfEmpty(field(row, r.headers, "Location"))))
-                if let o = odo { maxOdo[vid] = max(maxOdo[vid] ?? 0, o) }
+                    station: nilIfEmpty(field(row, r.headers, "Location")),
+                    filledToFull: filledToFull,
+                    missedPrevious: missedPrevious))
+                record(vid, odo, when)
                 counts[vid]?.f += 1
             }
         }
@@ -134,11 +161,12 @@ enum MyCarImporter {
                 let amount = sumColumn.flatMap { decimal(field(row, s.headers, $0)) }.flatMap { $0 > 0 ? $0 : nil }
                 let text = kind == .note ? field(row, s.headers, "Notes") : note(row, s.headers, typeColumn: typeColumn)
                 if kind == .note && text.isEmpty { continue }
+                let when = date(field(row, s.headers, "DateTime")) ?? Date()
                 result.entries.append(LogEntry(
                     carID: cid, kind: kind,
-                    date: date(field(row, s.headers, "DateTime")) ?? Date(),
+                    date: when,
                     amount: amount, note: text, odometerKm: odo))
-                if let o = odo { maxOdo[vid] = max(maxOdo[vid] ?? 0, o) }
+                record(vid, odo, when)
                 switch kind { case .service: counts[vid]?.s += 1; case .expense: counts[vid]?.e += 1; case .note: counts[vid]?.n += 1 }
             }
         }
@@ -146,13 +174,12 @@ enum MyCarImporter {
         ingest("Expenses", kind: .expense, typeColumn: "Expense", sumColumn: "Sum")
         ingest("NoteEvents", kind: .note, typeColumn: "Notes", sumColumn: nil)
 
-        // Odometer events only move the "current" reading.
+        // Odometer events feed the dated trail (and the current reading).
         if let o = sections["OdometerEvents"] {
             for row in o.rows {
                 let vid = field(row, o.headers, "vehicleId")
-                if let km = odometerKm(field(row, o.headers, "Odometer"), unit: unitByVID[vid]) {
-                    maxOdo[vid] = max(maxOdo[vid] ?? 0, km)
-                }
+                record(vid, odometerKm(field(row, o.headers, "Odometer"), unit: unitByVID[vid]),
+                       date(field(row, o.headers, "DateTime")))
             }
         }
 
@@ -164,6 +191,16 @@ enum MyCarImporter {
             let initial = result.cars[idx].initialOdometerKm ?? 0
             let current = max(maxOdo[vid] ?? 0, initial)
             if current > 0 { result.cars[idx].odometerKm = current }
+            // Persist the dated odometer trail (collapsed to one reading per day) so the mileage
+            // gauge and the fuel-economy / distance lines have real history after import.
+            if let readings = readingsByVID[vid], !readings.isEmpty {
+                let cal = Calendar.current
+                var byDay: [Date: Int] = [:]
+                for r in readings.sorted(by: { $0.date < $1.date }) { byDay[cal.startOfDay(for: r.date)] = r.km }
+                result.cars[idx].odometerLog = byDay.map { OdometerReading(date: $0.key, km: $0.value) }
+                    .sorted { $0.date < $1.date }
+            }
+            if let sold = soldByVID[vid] { result.cars[idx].archivedAt = sold }
             let c = counts[vid] ?? (0, 0, 0, 0)
             let car = result.cars[idx]
             result.summaries.append(CarSummary(
@@ -250,6 +287,17 @@ enum MyCarImporter {
         return Int(km.rounded())
     }
 
+    /// MyCar fuel volume can be US gallons (fuelUnit "1") or imperial gallons ("2"); normalise to
+    /// litres so every derived L/100km is right. Anything else (incl. blank) is treated as litres.
+    private static func volumeLiters(_ s: String, unit: String?) -> Double? {
+        guard let v = double(s), v > 0 else { return nil }
+        switch unit {
+        case "1": return v * 3.785411784   // US gallon → L
+        case "2": return v * 4.54609       // imperial gallon → L
+        default:  return v                 // litres
+        }
+    }
+
     private static func fuelType(_ code: String) -> FuelType {
         switch code {
         case "0": return .petrol
@@ -278,13 +326,34 @@ enum MyCarImporter {
     }
 
     // MARK: photos (from a .dat backup)
-    /// Pull each car's wide photo out of a MyCar `.dat` (a ZIP), keyed by Koi car id, downscaled.
+    /// Pull each car's photo out of a MyCar `.dat` (a ZIP), keyed by Koi car id, downscaled.
+    /// Globs the archive (any image under the car's folder, preferring the wide hero) instead of a
+    /// single hard-coded path, so it survives MyCar layout/extension changes. Returns [:] if the
+    /// data isn't a readable ZIP or holds no car images — the caller surfaces that to the user.
     static func photos(fromDat data: Data, vehicleIDByCarID: [UUID: String]) -> [UUID: Data] {
         guard let zip = ZipReader(data) else { return [:] }
+        let imageExts = ["jpg", "jpeg", "png", "heic"]
+        let imageNames = zip.names.filter { name in
+            let l = name.lowercased(); return imageExts.contains { l.hasSuffix("." + $0) }
+        }
+        func extractDownscaled(_ name: String) -> Data? {
+            guard let raw = zip.extract(name) else { return nil }
+            return downscaledJPEG(raw, maxPixel: 1400) ?? raw
+        }
+        func pickWide(_ names: [String]) -> String? {
+            names.first { $0.lowercased().contains("wideimage") } ?? names.first
+        }
+
         var out: [UUID: Data] = [:]
         for (carID, vid) in vehicleIDByCarID {
-            guard let jpeg = zip.extract("files/\(vid)/images/__$wideimage.jpg") else { continue }
-            out[carID] = downscaledJPEG(jpeg, maxPixel: 1400) ?? jpeg
+            let needle = "/\(vid.lowercased())/"
+            let forVID = imageNames.filter { $0.lowercased().contains(needle) }
+            if let name = pickWide(forVID), let photo = extractDownscaled(name) { out[carID] = photo }
+        }
+        // Single-car fallback: folder ids didn't line up but there's exactly one car and an image.
+        if out.isEmpty, vehicleIDByCarID.count == 1, let carID = vehicleIDByCarID.keys.first,
+           let name = pickWide(imageNames), let photo = extractDownscaled(name) {
+            out[carID] = photo
         }
         return out
     }
