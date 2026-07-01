@@ -5,7 +5,6 @@ import SwiftUI
 /// than one resident — lets you switch car right here, so a quick log never lands on the wrong one.
 struct LogSheetView: View {
     @EnvironmentObject private var garage: Garage
-    @EnvironmentObject private var fuel: FuelPriceStore
     @Environment(\.dismiss) private var dismiss
     @State private var car: Car
 
@@ -496,5 +495,4 @@ private struct Caret: View {
 #Preview {
     LogSheetView(car: Garage.preview.residents.first!)
         .environmentObject(Garage.preview)
-        .environmentObject(FuelPriceStore.preview)
 }

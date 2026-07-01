@@ -20,10 +20,8 @@ struct PrivacyPolicyView: View {
 
                     section("What stays on your device",
                             "Your cars, plans, costs, fuel logs, photos, reminders and any insurance details live only on this iPhone, and in your own encrypted iCloud device backup, which only you can access. Photos are downscaled and stripped of location/EXIF metadata when you add them.")
-                    section("What leaves your device",
-                            "Only two things, both made directly from your phone, never through a Koi server:\n• Your chosen region (a province code) goes to the Spanish government's public fuel-price feed (minetur) to fetch local prices.\n• If you ask for directions, the station address is handed to your maps app.\nNeither request identifies you, and we don't log anything.")
-                    section("Location",
-                            "If you allow it, your location is used only while the app is open, only to find the cheapest fuel near you. It is never stored and never sent to us.")
+                    section("Nothing leaves your device",
+                            "Koi has no servers and makes no network requests of its own. Your data is never uploaded, shared, or sent anywhere — it simply lives on your iPhone.")
                     section("No tracking",
                             "Koi has no advertising, no analytics, and no third-party tracking. It doesn't track you across other apps or websites.")
                     section("Data we collect",

@@ -4,6 +4,7 @@ import SwiftUI
 /// the 4th action becomes Swap car, and a plan card + lineage appear.
 struct CarDetailView: View {
     @EnvironmentObject private var garage: Garage
+    @EnvironmentObject private var units: Units
     @Environment(\.dismiss) private var dismiss
     private let referenceCar: Car
     @State private var activeSheet: CarSheet?
@@ -16,7 +17,7 @@ struct CarDetailView: View {
     private var car: Car { garage.car(referenceCar.id) ?? referenceCar }
 
     private enum CarSheet: Int, Identifiable {
-        case log, vault, edit, addReminder, swap, mileageHistory
+        case log, vault, edit, addReminder, swap, mileageHistory, insights
         var id: Int { rawValue }
     }
 
@@ -30,7 +31,6 @@ struct CarDetailView: View {
                     .clipShape(RoundedRectangle(cornerRadius: KoiRadius.card, style: .continuous))
                 header
                 actions
-                planCard
                 detailsCard
                 timeline
             }
@@ -70,6 +70,7 @@ struct CarDetailView: View {
         case .edit:        EditCarView(car: car).environmentObject(garage)
         case .addReminder: AddReminderView(car: car).environmentObject(garage)
         case .mileageHistory: MileageHistoryView(car: car).environmentObject(garage)
+        case .insights:    InsightsView(car: car).environmentObject(garage).environmentObject(units)
         case .swap:
             if let plan {
                 NavigationStack {
@@ -136,50 +137,107 @@ struct CarDetailView: View {
     }
 
     // Cost lives on the car page, never on the Glance.
+    /// The single car card: plan summary (when on a plan) + spent-so-far + a 2×2 grid with calm
+    /// sparklines, the plan extras folded in, and a link to the full insights. One card, no second box.
     @ViewBuilder private var detailsCard: some View {
         let spent = garage.totalSpent(on: car)
-        VStack(alignment: .leading, spacing: 10) {
-            Eyebrow(text: "Cost & details")
+        VStack(alignment: .leading, spacing: 16) {
+            Eyebrow(text: "How it's going")
+            if let plan, plan.kind != .owned {
+                Text(planLine(plan)).koiStyle(.monoSm).foregroundStyle(KoiColors.textSecondary)
+            }
             if spent > 0 {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(KoiFormat.money(spent)).koiStyle(.monoLg).foregroundStyle(KoiColors.textPrimary)
+                    Text(units.money(spent)).koiStyle(.monoLg).foregroundStyle(KoiColors.textPrimary)
                     Text("spent so far").koiStyle(.meta).foregroundStyle(KoiColors.textSubdued)
                 }
             }
-            if !specsLine.isEmpty {
-                Text(specsLine).koiStyle(.meta).foregroundStyle(KoiColors.textSecondary)
-            }
             Text(ownershipLine).koiStyle(.meta).foregroundStyle(KoiColors.textSubdued)
-            // Quiet "how it's doing" context — a sentence and a word, never a chart. Both nil-out
-            // cleanly until there's enough history, so they never show a fabricated number.
-            if let economyLine {
-                Text(economyLine).koiStyle(.meta).foregroundStyle(KoiColors.textSecondary)
-            }
-            if let distanceLine {
-                Text(distanceLine).koiStyle(.meta).foregroundStyle(KoiColors.textSecondary)
-            }
+            statGrid
+            planFooter
+            seeFullPicture
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .koiCard()
     }
 
-    /// "About 6.2 L/100km lately, steady" — quiet recent fuel economy. nil until ≥2 fills pair up.
-    private var economyLine: String? {
-        guard let e = garage.recentEconomy(for: car) else { return nil }
-        return "About \(KoiFormat.efficiency(e.l100)) lately, \(e.trend.word)"
+    private var statGrid: some View {
+        let recent = garage.recentEconomy(for: car)
+        return VStack(spacing: 18) {
+            HStack(alignment: .top, spacing: 16) {
+                statCell("Per month", garage.distancePerMonth(for: car).map { units.distanceText($0) } ?? "—")
+                statCell("Fuel use", recent.map { units.economyText($0.l100) } ?? "—",
+                         arrow: recent.flatMap { trendArrow($0.trend) },
+                         arrowColor: recent?.trend == .improving ? KoiColors.sageText : KoiColors.ochreText)
+            }
+            HStack(alignment: .top, spacing: 16) {
+                statCell("Running cost", runningCostValue)
+                statCell("Full tank", garage.tankRange(for: car).map { "≈\(units.distanceText($0))" } ?? "—")
+            }
+        }
+        .padding(.top, 2)
     }
 
-    /// "About 1,100 km a month" — quiet distance pace from the odometer trail. nil without history.
-    private var distanceLine: String? {
-        guard let km = garage.distancePerMonth(for: car) else { return nil }
-        return "About \(KoiFormat.km(km)) a month"
+    /// One quiet number per cell — charts + trend wording live in the full insights, not here.
+    private func statCell(_ label: String, _ value: String, arrow: String? = nil, arrowColor: Color = .clear) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(label).koiStyle(.meta).foregroundStyle(KoiColors.textSubdued)
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                Text(value).koiStyle(.monoMd).foregroundStyle(KoiColors.textPrimary)
+                if let arrow { Text(arrow).koiStyle(.body).foregroundStyle(arrowColor) }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private var specsLine: String {
-        var parts: [String] = []
-        if let hp = car.powerHP { parts.append("\(hp) CV") }
-        if let cvf = car.fiscalPowerCV { parts.append("\(cvf.formatted()) fiscal") }
-        return parts.joined(separator: " · ")
+    private func trendArrow(_ t: EconomyTrend) -> String? {
+        switch t {
+        case .creepingUp: return "↑"
+        case .improving:  return "↓"
+        case .steady:     return nil
+        }
+    }
+
+    /// Plan extras folded into the card (deposit, term, swap, finance payoff, mileage history).
+    @ViewBuilder private var planFooter: some View {
+        if let plan, plan.kind != .owned {
+            VStack(alignment: .leading, spacing: 6) {
+                Rectangle().fill(KoiColors.hairline).frame(height: 1).padding(.vertical, 2)
+                if let dep = plan.initialPayment, dep > 0 {
+                    Text("\(units.money(dep)) paid up front").koiStyle(.meta).foregroundStyle(KoiColors.textSubdued)
+                }
+                if let end = plan.endsAt {
+                    Text("Ends \(end.formatted(.dateTime.month(.abbreviated).year()))")
+                        .koiStyle(.meta).foregroundStyle(KoiColors.textSubdued)
+                }
+                if plan.allowsSwap {
+                    Text(swapText(plan)).koiStyle(.meta).foregroundStyle(KoiColors.textSubdued)
+                }
+                if plan.kind == .finance { financePayoff(plan) }
+                if let cap = plan.mileageCapPerMonth, cap > 0 {
+                    cardLink("Mileage history") { activeSheet = .mileageHistory }
+                }
+            }
+        }
+    }
+
+    private var seeFullPicture: some View { cardLink("See the full picture") { activeSheet = .insights } }
+
+    private func cardLink(_ title: String, _ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 4) {
+                Text(title).koiStyle(.meta).foregroundStyle(KoiColors.sageText)
+                Image(systemName: "chevron.right").font(.system(size: 10, weight: .semibold)).foregroundStyle(KoiColors.sageText)
+            }
+        }
+        .buttonStyle(.plain)
+        .padding(.top, 2)
+    }
+
+    private var runningCostValue: String {
+        guard let rc = garage.runningCost(for: car) else { return "—" }
+        let m = rc.perMonth.formatted(.currency(code: units.currencyCode).precision(.fractionLength(0)))
+        return "≈\(m)/mo"
     }
 
     private var ownershipLine: String {
@@ -223,41 +281,6 @@ struct CarDetailView: View {
             )
         }
         .buttonStyle(.plain)
-    }
-
-    @ViewBuilder private var planCard: some View {
-        if let plan, plan.kind != .owned {
-            VStack(alignment: .leading, spacing: 6) {
-                Eyebrow(text: plan.kind.label)
-                Text(planLine(plan)).koiStyle(.monoMd).foregroundStyle(KoiColors.textPrimary)
-                if let dep = plan.initialPayment, dep > 0 {
-                    Text("\(KoiFormat.money(dep)) paid up front")
-                        .koiStyle(.meta).foregroundStyle(KoiColors.textSubdued)
-                }
-                if let end = plan.endsAt {
-                    Text("Ends \(end.formatted(.dateTime.month(.abbreviated).year()))")
-                        .koiStyle(.meta).foregroundStyle(KoiColors.textSubdued)
-                }
-                if plan.allowsSwap {
-                    Text(swapText(plan))
-                        .koiStyle(.meta).foregroundStyle(KoiColors.textSubdued)
-                }
-                if plan.kind == .finance { financePayoff(plan) }
-                if let cap = plan.mileageCapPerMonth, cap > 0 {
-                    Button { activeSheet = .mileageHistory } label: {
-                        HStack(spacing: 4) {
-                            Text("Mileage history").koiStyle(.meta).foregroundStyle(KoiColors.sageText)
-                            Image(systemName: "chevron.right").font(.system(size: 10, weight: .semibold))
-                                .foregroundStyle(KoiColors.sageText)
-                        }
-                    }
-                    .buttonStyle(.plain)
-                    .padding(.top, 4)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .koiCard()
-        }
     }
 
     /// Finance → owned affordance: mark it paid off (with a nudge once the term ends), or undo.
@@ -401,4 +424,5 @@ struct TimelineRow: View {
 #Preview {
     NavigationStack { CarDetailView(car: Garage.preview.residents.last!) }
         .environmentObject(Garage.preview)
+        .environmentObject(Units.preview)
 }

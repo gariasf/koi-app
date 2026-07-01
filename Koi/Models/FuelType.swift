@@ -1,7 +1,6 @@
 import Foundation
 
-/// A car's powertrain / fuel. Drives the Glance "nearby price" card (which liquid fuel,
-/// or none for electric) and is shown on the car.
+/// A car's powertrain / fuel — shown on the car and used to label fills.
 enum FuelType: String, Codable, CaseIterable, Identifiable {
     case petrol, diesel, electric, hybrid, mildHybrid, pluginHybrid, lpg, cng, other
 
@@ -18,16 +17,6 @@ enum FuelType: String, Codable, CaseIterable, Identifiable {
         case .lpg:           return "LPG"
         case .cng:           return "CNG"
         case .other:         return "Other"
-        }
-    }
-
-    /// The liquid-fuel price that applies for "nearby" — nil means no petrol/diesel price
-    /// (electric, gas, other → the card hides or adapts).
-    var nearbyProduct: FuelProduct? {
-        switch self {
-        case .petrol, .hybrid, .mildHybrid, .pluginHybrid: return .petrol
-        case .diesel:                                      return .diesel
-        case .electric, .lpg, .cng, .other:                return nil
         }
     }
 }

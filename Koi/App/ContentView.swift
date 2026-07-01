@@ -31,8 +31,8 @@ struct ContentView: View {
 }
 
 #Preview("First run") {
-    ContentView().environmentObject(Garage(persists: false)).environmentObject(FuelPriceStore.preview)
+    ContentView().environmentObject(Garage(persists: false))
 }
 #Preview("App") {
-    ContentView().environmentObject(Garage.preview).environmentObject(FuelPriceStore.preview)
+    ContentView().environmentObject(Garage.preview)
 }

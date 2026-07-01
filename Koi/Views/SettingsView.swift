@@ -1,8 +1,8 @@
 import SwiftUI
 
-/// Minimal settings — fuel product + region (province) for the live price feed.
+/// Minimal settings — appearance, display units, and your data.
 struct SettingsView: View {
-    @EnvironmentObject private var fuel: FuelPriceStore
+    @EnvironmentObject private var units: Units
     @EnvironmentObject private var garage: Garage
     @EnvironmentObject private var router: AppRouter
     @Environment(\.dismiss) private var dismiss
@@ -18,7 +18,7 @@ struct SettingsView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     appearanceSection
-                    regionSection
+                    unitsSection
                     dataSection
                     footer
                     versionLine
@@ -29,8 +29,6 @@ struct SettingsView: View {
             }
         }
         .background(KoiColors.surface.ignoresSafeArea())
-        .onChange(of: fuel.provinceID) { Task { await fuel.refresh() } }
-        .onChange(of: fuel.manuallyEnabled) { if fuel.manuallyEnabled { Task { await fuel.refresh() } } }
         .task { exportURL = garage.exportJSON() }
     }
 
@@ -46,53 +44,63 @@ struct SettingsView: View {
         }
     }
 
-    @ViewBuilder private var regionSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Eyebrow(text: "Fuel prices")
-            // Where the phone isn't set to Spain, offer an explicit opt-in (e.g. an expat in Spain)
-            // instead of hiding the feature entirely. Off by default — never a wrong price elsewhere.
-            if !fuel.autoEnabled {
-                Toggle(isOn: $fuel.manuallyEnabled) {
-                    Text("Show Spanish fuel prices").koiStyle(.body).foregroundStyle(KoiColors.textPrimary)
+    private var unitsSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Eyebrow(text: "Units")
+            unitPickerRow("Distance") {
+                Picker("Distance", selection: $units.distance) {
+                    ForEach(DistanceUnit.allCases) { Text($0.label).tag($0) }
+                }.pickerStyle(.segmented)
+            }
+            unitPickerRow("Fuel economy") {
+                Picker("Fuel economy", selection: $units.economy) {
+                    ForEach(EconomyUnit.allCases) { Text($0.label).tag($0) }
+                }.pickerStyle(.segmented)
+            }
+            unitPickerRow("Volume") {
+                Picker("Volume", selection: $units.volume) {
+                    ForEach(VolumeUnit.allCases) { Text($0.label).tag($0) }
+                }.pickerStyle(.segmented)
+            }
+            unitPickerRow("Currency") {
+                Menu {
+                    ForEach(Self.currencyChoices, id: \.self) { c in
+                        Button(currencyLabel(c)) { units.currencyCode = c }
+                    }
+                } label: {
+                    HStack {
+                        Text(currencyLabel(units.currencyCode)).koiStyle(.body).foregroundStyle(KoiColors.textPrimary)
+                        Spacer()
+                        Image(systemName: "chevron.up.chevron.down").font(.system(size: 12)).foregroundStyle(KoiColors.textSubdued)
+                    }
+                    .padding(.horizontal, 14).padding(.vertical, 11)
+                    .background(KoiColors.fieldFill, in: RoundedRectangle(cornerRadius: KoiRadius.field, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: KoiRadius.field, style: .continuous).strokeBorder(KoiColors.border, lineWidth: 1))
                 }
-                .tint(KoiColors.sage)
             }
-            if fuel.available {
-                provinceMenu
-                Text("Prices come from the Spanish government’s open feed (minetur), and are kept on your device.")
-                    .koiStyle(.meta).foregroundStyle(KoiColors.textSubdued)
-                    .fixedSize(horizontal: false, vertical: true)
-            } else {
-                Text("Turn this on if you’re in Spain but your phone’s region isn’t set to Spain. Otherwise Koi shows no fuel prices.")
-                    .koiStyle(.meta).foregroundStyle(KoiColors.textSubdued)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+            Text("Default from your device’s region — change anytime.")
+                .koiStyle(.meta).foregroundStyle(KoiColors.textSubdued)
         }
     }
 
-    private var provinceMenu: some View {
-        Menu {
-            ForEach(Province.all) { p in
-                Button(p.name) { fuel.setProvince(p.id) }
-            }
-        } label: {
-            HStack {
-                Text(fuel.provinceName).koiStyle(.body).foregroundStyle(KoiColors.textPrimary)
-                Spacer()
-                Image(systemName: "chevron.up.chevron.down").font(.system(size: 12)).foregroundStyle(KoiColors.textSubdued)
-            }
-            .padding(.horizontal, 14).padding(.vertical, 12)
-            .background(KoiColors.fieldFill, in: RoundedRectangle(cornerRadius: KoiRadius.field, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: KoiRadius.field, style: .continuous).strokeBorder(KoiColors.border, lineWidth: 1))
+    private func unitPickerRow<P: View>(_ label: String, @ViewBuilder picker: () -> P) -> some View {
+        VStack(alignment: .leading, spacing: 7) {
+            Text(label).koiStyle(.body).foregroundStyle(KoiColors.textPrimary)
+            picker()
         }
+    }
+
+    private static let currencyChoices = ["EUR", "USD", "GBP", "NOK", "SEK", "DKK", "CHF", "CAD", "AUD", "JPY"]
+    private func currencyLabel(_ code: String) -> String {
+        let sym = ["EUR": "€", "USD": "$", "GBP": "£", "NOK": "kr", "SEK": "kr", "DKK": "kr",
+                   "CHF": "Fr", "CAD": "$", "AUD": "$", "JPY": "¥"][code] ?? code
+        return "\(code) \(sym)"
     }
 
     private var dataSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Eyebrow(text: "Your data")
-            Text(fuel.available
-                 ? "Koi keeps your cars, plans, costs, photos, reminders and any insurance details on this device. The only thing it sends is your chosen region, so it can fetch local fuel prices from the Spanish government feed. No account, no personal data."
-                 : "Koi keeps your cars, plans, costs, photos, reminders and any insurance details on this device. Nothing leaves your phone. No account, no servers, no personal data.")
+            Text("Koi keeps your cars, plans, costs, photos, reminders and any insurance details on this device. Nothing leaves your phone. No account, no servers, no personal data.")
                 .koiStyle(.meta).foregroundStyle(KoiColors.textSubdued)
                 .fixedSize(horizontal: false, vertical: true)
             VStack(spacing: 0) {
@@ -174,4 +182,4 @@ struct SettingsView: View {
     }
 }
 
-#Preview { SettingsView().environmentObject(FuelPriceStore.preview).environmentObject(Garage.preview).environmentObject(AppRouter()) }
+#Preview { SettingsView().environmentObject(Units.preview).environmentObject(Garage.preview).environmentObject(AppRouter()) }

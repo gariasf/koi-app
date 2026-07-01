@@ -133,15 +133,125 @@ final class Garage: ObservableObject {
         return (avg, trend)
     }
 
-    /// Roughly how far a car is driven each month, from its odometer trail since you got it.
-    /// nil without a baseline or under ~a month of history (avoids divide-by-near-zero).
-    func distancePerMonth(for car: Car) -> Int? {
-        let baseline = car.initialOdometerKm ?? car.odometerLog?.first?.km
-        guard let baseline, let current = car.odometerKm, current > baseline else { return nil }
-        let start = car.odometerLog?.first?.date ?? car.addedAt
-        guard let days = Calendar.current.dateComponents([.day], from: start, to: Date()).day,
+    /// (km driven since you got the car, months owned) — the spine of the per-month / per-year /
+    /// running-cost stats. nil without a baseline odometer or under ~a month of history.
+    private func ownership(_ car: Car) -> (distanceKm: Int, months: Double)? {
+        // baseline km and its date must come from the SAME source, or the rate is skewed.
+        let baseline: (km: Int, date: Date)?
+        if let initial = car.initialOdometerKm { baseline = (initial, car.addedAt) }
+        else if let first = car.odometerLog?.first { baseline = (first.km, first.date) }
+        else { baseline = nil }
+        guard let baseline, let current = car.odometerKm, current > baseline.km else { return nil }
+        guard let days = Calendar.current.dateComponents([.day], from: baseline.date, to: Date()).day,
               days >= 30 else { return nil }
-        return Int((Double(current - baseline) / (Double(days) / 30.44)).rounded())
+        return (current - baseline.km, Double(days) / 30.44)
+    }
+
+    /// Whole months since the car joined the garage (≥1), for rates that don't need a distance baseline.
+    private func monthsSinceAdded(_ car: Car) -> Double {
+        let start = car.odometerLog?.first?.date ?? car.addedAt
+        let days = Calendar.current.dateComponents([.day], from: start, to: Date()).day ?? 0
+        return max(1, Double(days) / 30.44)
+    }
+
+    /// Roughly how far a car is driven each month, from its odometer trail since you got it.
+    func distancePerMonth(for car: Car) -> Int? {
+        guard let o = ownership(car) else { return nil }
+        return Int((Double(o.distanceKm) / o.months).rounded())
+    }
+
+    /// Annualised distance pace (per-month × 12) — the "this year" figure.
+    func distanceThisYear(for car: Car) -> Int? { distancePerMonth(for: car).map { $0 * 12 } }
+
+    /// How many fills are logged for a car.
+    func fuelLogCount(for car: Car) -> Int { fuelLogs(for: car).count }
+
+    /// Estimated km on a full tank — tank size ÷ recent economy. nil for EVs / no economy / no tank.
+    func tankRange(for car: Car) -> Int? {
+        guard let tank = car.tankCapacityL, tank > 0, let eco = recentEconomy(for: car)?.l100, eco > 0 else { return nil }
+        return Int((tank / eco * 100).rounded())
+    }
+
+    /// Ongoing running cost — fuel + service + expenses (+ a plan's recurring monthly), as a per-month
+    /// figure and, when there's a distance baseline, per km. Excludes the purchase price / deposit
+    /// (capital, not running). nil until there's enough spend + history to be honest.
+    func runningCost(for car: Car) -> (perMonth: Decimal, perKm: Decimal?)? {
+        var spend: Decimal = 0
+        if let p = plan(for: car), p.kind != .owned, let m = p.monthlyCost {
+            spend += m * Decimal(monthsBilled(for: p))
+        }
+        for f in fuelLogs(for: car) { spend += f.amount }
+        for e in entries(for: car) where e.kind != .note { spend += e.amount ?? 0 }
+        guard spend > 0 else { return nil }
+        let months = ownership(car)?.months ?? monthsSinceAdded(car)
+        let perMonth = spend / Decimal(months)
+        let perKm = ownership(car).flatMap { $0.distanceKm > 0 ? spend / Decimal($0.distanceKm) : nil }
+        return (perMonth, perKm)
+    }
+
+    // MARK: Fleet totals — the all-cars Home summary (sum over resident, non-archived cars)
+
+    func fleetDistancePerMonth() -> Int? {
+        let v = residents.compactMap { distancePerMonth(for: $0) }
+        return v.isEmpty ? nil : v.reduce(0, +)
+    }
+    func fleetRunningCostPerMonth() -> Decimal? {
+        let v = residents.compactMap { runningCost(for: $0)?.perMonth }
+        return v.isEmpty ? nil : v.reduce(0, +)
+    }
+    /// Fleet cost per km = total monthly cost ÷ total monthly distance (the two monthly rates' ratio).
+    func fleetCostPerKm() -> Decimal? {
+        guard let cost = fleetRunningCostPerMonth(), let km = fleetDistancePerMonth(), km > 0 else { return nil }
+        return cost / Decimal(km)
+    }
+    func fleetSpent() -> Decimal { residents.reduce(0) { $0 + totalSpent(on: $1) } }
+    /// Most recent fill across all cars, with its car — for the Home "last fill-up".
+    func latestFill() -> (log: FuelLog, car: Car)? {
+        fuelLogs.sorted { $0.date > $1.date }.lazy.compactMap { l in self.car(l.carID).map { (l, $0) } }.first
+    }
+
+    // MARK: Chart series — for the card sparklines + the insights screen
+
+    /// Per-fill L/100km in date order (only fills that yield a clean value). Newest last.
+    func economySeries(for car: Car) -> [Double] {
+        let m = efficiencies(for: car)
+        return fuelLogs(for: car).sorted { $0.date < $1.date }.compactMap { m[$0.id] }
+    }
+
+    /// Distance driven per calendar month, from the odometer trail. Newest last. Months without two
+    /// readings are skipped (Koi never invents distance).
+    func monthlyDistanceSeries(for car: Car, limit: Int = 8) -> [Int] {
+        guard let log = car.odometerLog, log.count >= 2 else { return [] }
+        let cal = Calendar.current
+        var lastReadingInMonth: [Date: Int] = [:]
+        for r in log.sorted(by: { $0.date < $1.date }) {
+            let key = cal.date(from: cal.dateComponents([.year, .month], from: r.date)) ?? r.date
+            lastReadingInMonth[key] = r.km   // last reading of the month wins
+        }
+        let months = lastReadingInMonth.keys.sorted()
+        guard months.count >= 2 else { return [] }
+        var series: [Int] = []
+        for i in 1..<months.count {
+            let d = (lastReadingInMonth[months[i]] ?? 0) - (lastReadingInMonth[months[i - 1]] ?? 0)
+            if d >= 0 { series.append(d) }
+        }
+        return Array(series.suffix(limit))
+    }
+
+    /// Spend split into capital (purchase / deposit + plan recurring), fuel, service, other —
+    /// for the cost-breakdown bar. The first segment's label adapts (owned → "Purchase", plan → "Plan").
+    func costBreakdown(for car: Car) -> (capital: Decimal, fuel: Decimal, service: Decimal, other: Decimal) {
+        let p = plan(for: car)
+        var capital: Decimal = (p?.kind ?? .owned) == .owned ? (car.purchasePrice ?? 0) : 0
+        if let p, p.kind != .owned {
+            capital += (p.initialPayment ?? 0) + (p.monthlyCost ?? 0) * Decimal(monthsBilled(for: p))
+        }
+        let fuel = fuelLogs(for: car).reduce(Decimal(0)) { $0 + $1.amount }
+        var service: Decimal = 0, other: Decimal = 0
+        for e in entries(for: car) where e.kind != .note {
+            if e.kind == .service { service += e.amount ?? 0 } else { other += e.amount ?? 0 }
+        }
+        return (capital, fuel, service, other)
     }
 
     /// Km driven in the current cap cycle (month or year, per the plan), derived live from
@@ -402,22 +512,23 @@ final class Garage: ObservableObject {
     /// mileage-cap gauge (which derives this-month's km from the odometer).
     func setOdometer(_ km: Int, for carID: UUID, asOf date: Date = Date()) {
         guard let i = cars.firstIndex(where: { $0.id == carID }) else { return }
-        // Only the latest reading defines "now"; a backdated reading records history without
-        // clobbering a higher current odometer.
-        let readings = cars[i].odometerLog ?? []
-        let isLatest = readings.allSatisfy { $0.date <= date }
-        if isLatest { cars[i].odometerKm = km }
-        // Record a dated reading so the monthly-mileage gauge has history to measure against —
-        // even for cars that are never fuel-logged. Collapse same-day edits into one reading.
-        var log = readings
+        recordReading(i, km: km, date: date)
+        bumpRevision(i)
+        save()
+    }
+
+    /// Fold a dated odometer reading into a car's trail (collapsing same-day edits), and bump the
+    /// "current" reading when this is the latest. The spine the mileage gauge + distance line read.
+    private func recordReading(_ i: Int, km: Int, date: Date) {
+        var log = cars[i].odometerLog ?? []
+        // Only the latest reading defines "now"; a backdated one records history without clobbering it.
+        if log.allSatisfy({ $0.date <= date }) { cars[i].odometerKm = km }
         if let j = log.firstIndex(where: { Calendar.current.isDate($0.date, inSameDayAs: date) }) {
-            log[j].km = km
+            log[j].km = max(log[j].km, km)
         } else {
             log.append(OdometerReading(date: date, km: km))
         }
         cars[i].odometerLog = log.sorted { $0.date < $1.date }
-        bumpRevision(i)
-        save()
     }
 
     /// Shelve a car: keep it (and all its history) on file but out of the garage and every
@@ -562,9 +673,10 @@ final class Garage: ObservableObject {
 
     func addFuelLog(_ log: FuelLog) {
         fuelLogs.append(log)
-        if let i = cars.firstIndex(where: { $0.id == log.carID }),
-           let odo = log.odometerKm, odo > (cars[i].odometerKm ?? 0) {
-            cars[i].odometerKm = odo
+        // A fill is also an odometer reading — fold it into the trail so the distance line/gauge work
+        // for fuel-loggers without needing separate odometer entries.
+        if let i = cars.firstIndex(where: { $0.id == log.carID }), let odo = log.odometerKm, odo > 0 {
+            recordReading(i, km: odo, date: log.date)
             bumpRevision(i)
         }
         save()
@@ -826,6 +938,9 @@ final class Garage: ObservableObject {
         betsy.fuelType = .diesel; betsy.purchasePrice = 18_500; betsy.tankCapacityL = 55
         betsy.initialOdometerKm = 120_000                          // baseline → distance-per-month line
         betsy.addedAt = Date().addingTimeInterval(-420 * 86_400)   // owned ~14 months → a sane monthly pace
+        // A monthly odometer trail so the distance line on the insights screen has real shape.
+        betsy.odometerLog = [128_900, 130_600, 132_050, 134_300, 136_100, 137_600, 139_900, 141_551]
+            .enumerated().map { i, v in OdometerReading(date: Date().addingTimeInterval(Double(i - 8) * 30.44 * 86_400), km: v) }
         betsy.photo = Self.seedPhoto("golf")
         addOwnedCar(betsy)
         // Three full fills with odometers → two paired L/100km values, so the recent-economy line shows.

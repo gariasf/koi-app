@@ -9,7 +9,6 @@ enum KoiTab { case glance, timeline, log, garage }
 /// Either way, Log is an action: it opens the quick-add sheet rather than being a destination.
 struct RootTabView: View {
     @EnvironmentObject private var garage: Garage
-    @EnvironmentObject private var fuel: FuelPriceStore
     @EnvironmentObject private var router: AppRouter
     @State private var tab: KoiTab = {
         let a = ProcessInfo.processInfo.arguments
@@ -28,7 +27,6 @@ struct RootTabView: View {
                 if let car = garage.activeCar {
                     LogSheetView(car: car)
                         .environmentObject(garage)
-                        .environmentObject(fuel)
                         .presentationDragIndicator(.visible)
                 }
             }
@@ -194,14 +192,15 @@ struct RootTabView: View {
 
     @ViewBuilder private var devScreenContent: some View {
         switch devScreen {
-        case "log":          if let c = garage.activeCar { LogSheetView(car: c).environmentObject(garage).environmentObject(fuel) }
+        case "log":          if let c = garage.activeCar { LogSheetView(car: c).environmentObject(garage) }
         case "cardetail":    if let c = garage.residents.first { NavigationStack { CarDetailView(car: c).environmentObject(garage) } }
+        case "insights":     if let c = garage.residents.first { InsightsView(car: c).environmentObject(garage) }
         case "cardetailsub": if let c = garage.residents.last { NavigationStack { CarDetailView(car: c).environmentObject(garage) } }
         case "addplan":      NavigationStack { AddPlanCarView().environmentObject(garage) }
         case "addowned":     NavigationStack { AddOwnedCarView().environmentObject(garage) }
         case "editcar":      if let c = garage.residents.first { EditCarView(car: c).environmentObject(garage) }
         case "editcarsub":   if let c = garage.residents.last { EditCarView(car: c).environmentObject(garage) }
-        case "settings":     SettingsView().environmentObject(fuel)
+        case "settings":     SettingsView()
         case "privacy":      PrivacyPolicyView()
         case "adddoc":       if let c = garage.residents.first { AddDocumentView(car: c).environmentObject(garage) }
         case "import":       MyCarImportView().environmentObject(garage)
@@ -238,4 +237,4 @@ private struct KoiGlassLogCircle: ViewModifier {
     }
 }
 
-#Preview { RootTabView().environmentObject(Garage.preview).environmentObject(FuelPriceStore.preview).environmentObject(AppRouter()) }
+#Preview { RootTabView().environmentObject(Garage.preview).environmentObject(AppRouter()) }
